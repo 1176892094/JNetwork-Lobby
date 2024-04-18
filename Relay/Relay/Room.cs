@@ -53,7 +53,7 @@ namespace JFramework.Net
     }
 
     [Serializable]
-    struct RelayStats
+    internal struct RelayStats
     {
         public int ConnectedClients;
         public int RoomCount;
