@@ -22,6 +22,7 @@ namespace JFramework.Net
 
         private void Awake()
         {
+            Console.WriteLine("Awake");
             Log.Info = Console.WriteLine;
             Log.Warn = Console.WriteLine;
             Log.Error = Console.Error.WriteLine;

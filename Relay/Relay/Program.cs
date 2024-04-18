@@ -115,10 +115,11 @@ namespace JFramework.Net
                                 punches.Remove(clientId);
                             }
                         };
-
+                        
                         transport.StartServer();
 
                         WriteLogMessage("OK", ConsoleColor.Green);
+                        WriteLogMessage(GetLocalIp() + ":" + transport.port, ConsoleColor.Yellow);
                         if (setting.UseEndPoint)
                         {
                             WriteLogMessage("开启端口服务...", ConsoleColor.White, true);
@@ -237,6 +238,12 @@ namespace JFramework.Net
             {
                 Console.WriteLine(message);
             }
+        }
+        
+        private static string GetLocalIp()
+        {
+            var host = Dns.GetHostEntry(Dns.GetHostName());
+            return host.AddressList.FirstOrDefault(ip => ip.AddressFamily == AddressFamily.InterNetwork)?.ToString();
         }
     }
 }

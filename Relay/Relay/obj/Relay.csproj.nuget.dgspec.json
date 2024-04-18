@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "/Users/jinyijie/Documents/GitHub/JNetwork-Relay/Relay/Relay/Relay.csproj": {}
+    "/Users/jinyijie/Downloads/JNetwork-Relay/Relay/Relay/Relay.csproj": {}
   },
   "projects": {
-    "/Users/jinyijie/Documents/GitHub/JNetwork-Relay/Relay/Relay/Relay.csproj": {
+    "/Users/jinyijie/Downloads/JNetwork-Relay/Relay/Relay/Relay.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "/Users/jinyijie/Documents/GitHub/JNetwork-Relay/Relay/Relay/Relay.csproj",
+        "projectUniqueName": "/Users/jinyijie/Downloads/JNetwork-Relay/Relay/Relay/Relay.csproj",
         "projectName": "Relay",
-        "projectPath": "/Users/jinyijie/Documents/GitHub/JNetwork-Relay/Relay/Relay/Relay.csproj",
+        "projectPath": "/Users/jinyijie/Downloads/JNetwork-Relay/Relay/Relay/Relay.csproj",
         "packagesPath": "/Users/jinyijie/.nuget/packages/",
-        "outputPath": "/Users/jinyijie/Documents/GitHub/JNetwork-Relay/Relay/Relay/obj/",
+        "outputPath": "/Users/jinyijie/Downloads/JNetwork-Relay/Relay/Relay/obj/",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "/Users/jinyijie/.nuget/NuGet/NuGet.Config"
@@ -57,12 +57,18 @@
           ],
           "assetTargetFallback": true,
           "warn": true,
+          "downloadDependencies": [
+            {
+              "name": "Microsoft.NETCore.App.Host.osx-x64",
+              "version": "[5.0.17, 5.0.17]"
+            }
+          ],
           "frameworkReferences": {
             "Microsoft.NETCore.App": {
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "/usr/local/share/dotnet/sdk/5.0.203/RuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "/usr/local/share/dotnet/sdk/6.0.302/RuntimeIdentifierGraph.json"
         }
       }
     }
