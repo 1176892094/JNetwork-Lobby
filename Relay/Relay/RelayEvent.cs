@@ -56,9 +56,7 @@ namespace JFramework.Net
                 switch (opcode)
                 {
                     case OpCodes.CreateRoom:
-                        CreateRoom(clientId, data.ReadInt(ref position), data.ReadString(ref position), data.ReadBool(ref position),
-                            data.ReadString(ref position), data.ReadBool(ref position), data.ReadString(ref position),
-                            data.ReadBool(ref position), data.ReadInt(ref position));
+                        CreateRoom(clientId, data.ReadInt(ref position), data.ReadString(ref position), data.ReadBool(ref position), data.ReadString(ref position), data.ReadBool(ref position), data.ReadString(ref position), data.ReadBool(ref position), data.ReadInt(ref position));
                         break;
                     case OpCodes.RequestID:
                         SendClientId(clientId);
@@ -214,7 +212,7 @@ namespace JFramework.Net
             buffers.Return(sendBuffer);
         }
 
-        private void CreateRoom(int clientId, int maxPlayers, string serverName, bool isPublic, string serverData, bool useDirectConnect, string hostLocalIP, bool useNatPunch, int port)
+        private void CreateRoom(int clientId, int maxPlayers, string serverName, bool isPublic, string serverData, bool useDirect, string hostLocalIP, bool isPunch, int port)
         {
             LeaveRoom(clientId);
             Program.instance.connections.TryGetValue(clientId, out var hostIP);
@@ -229,9 +227,9 @@ namespace JFramework.Net
                 serverId = GetServerId(),
                 hostIP = hostIP,
                 hostLocalIP = hostLocalIP,
-                supportsDirectConnect = hostIP != null && useDirectConnect,
+                supportsDirectConnect = hostIP != null && useDirect,
                 port = port,
-                useNATPunch = useNatPunch
+                useNATPunch = isPunch
             };
 
             rooms.Add(room);
