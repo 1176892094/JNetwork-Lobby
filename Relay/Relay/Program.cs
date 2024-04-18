@@ -13,172 +13,169 @@ namespace JFramework.Net
 {
     internal class Program
     {
-        public static Transport transport;
+        public static Setting setting;
         public static Program instance;
-        public static Config conf;
+        public static Transport transport;
 
-        private RelayHandler _relay;
-        private MethodInfo _awakeMethod;
-        private MethodInfo _startMethod;
-        private MethodInfo _updateMethod;
-        private MethodInfo _lateUpdateMethod;
+        private int heartBeat;
+        private DateTime startTime;
+        private MethodInfo awakeMethod;
+        private MethodInfo startMethod;
+        private MethodInfo updateMethod;
+        private MethodInfo lateUpdateMethod;
+        private RelayHandler relay;
 
-        private DateTime _startupTime;
+        private UdpClient punchServer;
+        private int NATRequestPosition;
+        private readonly byte[] NATRequest = new byte[500];
+        private readonly List<int> clients = new List<int>();
+        private readonly HashMap<int, string> punches = new HashMap<int, string>();
+        public readonly Dictionary<int, IPEndPoint> connections = new Dictionary<int, IPEndPoint>();
 
-        private List<int> _currentConnections = new List<int>();
-        public Dictionary<int, IPEndPoint> NATConnections = new Dictionary<int, IPEndPoint>();
-        private HashMap<int, string> _pendingNATPunches = new HashMap<int, string>();
-        private int _currentHeartbeatTimer = 0;
-
-        private byte[] _NATRequest = new byte[500];
-        private int _NATRequestPosition = 0;
-
-        private UdpClient _punchServer;
-
-        private const string CONFIG_PATH = "config.json";
+        private const string CONFIG_PATH = "setting.json";
 
         public static void Main(string[] args) => new Program().MainAsync().GetAwaiter().GetResult();
 
-        public int GetConnections() => _currentConnections.Count;
-        public TimeSpan GetUptime() => DateTime.Now - _startupTime;
-        public int GetPublicRoomCount() => _relay.rooms.Where(x => x.isPublic).Count();
-        public List<Room> GetRooms() => _relay.rooms;
+        public int GetConnections() => clients.Count;
+        public TimeSpan GetUptime() => DateTime.Now - startTime;
+        public int GetPublicRoomCount() => relay.rooms.Count(x => x.isPublic);
+        public List<Room> GetRooms() => relay.rooms;
 
         public async Task MainAsync()
         {
             instance = this;
-            _startupTime = DateTime.Now;
+            startTime = DateTime.Now;
+            WriteLogMessage("启动中继服务器!", ConsoleColor.Green);
 
             if (!File.Exists(CONFIG_PATH))
             {
-                File.WriteAllText(CONFIG_PATH, JsonConvert.SerializeObject(new Config(), Formatting.Indented));
-                WriteLogMessage("A config.json file was generated. Please configure it to the proper settings and re-run!",
-                    ConsoleColor.Yellow);
+                await File.WriteAllTextAsync(CONFIG_PATH, JsonConvert.SerializeObject(new Setting(), Formatting.Indented));
+                WriteLogMessage("请将 setting.json 文件配置正确并重新运行!", ConsoleColor.Yellow);
                 Console.ReadKey();
                 Environment.Exit(0);
             }
             else
             {
-                conf = JsonConvert.DeserializeObject<Config>(File.ReadAllText(CONFIG_PATH));
-                WriteLogMessage("Loading Assembly... ", ConsoleColor.White, true);
+                setting = JsonConvert.DeserializeObject<Setting>(await File.ReadAllTextAsync(CONFIG_PATH));
+                WriteLogMessage("加载程序集...", ConsoleColor.White, true);
                 try
                 {
-                    var asm = Assembly.LoadFile(Directory.GetCurrentDirectory() + @"\" + conf.TransportDLL);
-                    WriteLogMessage($"OK", ConsoleColor.Green);
-
-                    WriteLogMessage("\nLoading Transport Class... ", ConsoleColor.White, true);
-
-                    transport = asm.CreateInstance(conf.TransportClass) as Transport;
-
+                    var assembly = Assembly.LoadFile(Path.GetFullPath(setting.Assembly));
+                    WriteLogMessage("OK", ConsoleColor.Green);
+                    WriteLogMessage("加载传输类...", ConsoleColor.White, true);
+                    transport = assembly.CreateInstance(setting.TransportClass) as Transport;
                     if (transport != null)
                     {
-                        var transportClass = asm.GetType(conf.TransportClass);
+                        var type = assembly.GetType(setting.TransportClass);
                         WriteLogMessage("OK", ConsoleColor.Green);
-
-                        WriteLogMessage("\nLoading Transport Methods... ", ConsoleColor.White, true);
-                        CheckMethods(transportClass);
-                        WriteLogMessage("OK", ConsoleColor.Green);
-
-                        WriteLogMessage("\nInvoking Transport Methods...");
-
-                        if (_awakeMethod != null)
-                            _awakeMethod.Invoke(transport, null);
-
-                        if (_startMethod != null)
-                            _startMethod.Invoke(transport, null);
-
-                        WriteLogMessage("\nStarting Transport... ", ConsoleColor.White, true);
-
-                        transport.OnServerConnected = (clientID) =>
+                        WriteLogMessage("加载传输方法...", ConsoleColor.White, true);
+                        if (type != null)
                         {
-                            WriteLogMessage($"Transport Connected, Client: {clientID}", ConsoleColor.Cyan);
-                            _currentConnections.Add(clientID);
-                            _relay.ClientConnected(clientID);
+                            awakeMethod = type.GetMethod("Awake", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                            startMethod = type.GetMethod("Start", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                            updateMethod = type.GetMethod("Update", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                            lateUpdateMethod = type.GetMethod("LateUpdate",
+                                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                        }
 
-                            if (conf.EnableNATPunchtroughServer)
+                        WriteLogMessage("OK", ConsoleColor.Green);
+                        awakeMethod?.Invoke(transport, null);
+                        startMethod?.Invoke(transport, null);
+                        WriteLogMessage("开始进行传输...", ConsoleColor.White, true);
+
+                        transport.OnServerConnected = clientId =>
+                        {
+                            WriteLogMessage($"客户端 {clientId} 连接到传输。", ConsoleColor.Cyan);
+                            clients.Add(clientId);
+                            relay.ClientConnected(clientId);
+                            if (setting.EnableNATPunchServer)
                             {
-                                string natID = Guid.NewGuid().ToString();
-                                _pendingNATPunches.Add(clientID, natID);
-                                _NATRequestPosition = 0;
-                                _NATRequest.WriteByte(ref _NATRequestPosition, (byte)OpCodes.RequestNATConnection);
-                                _NATRequest.WriteString(ref _NATRequestPosition, natID);
-                                transport.ServerSend(clientID, new ArraySegment<byte>(_NATRequest, 0, _NATRequestPosition));
+                                var punchId = Guid.NewGuid().ToString();
+                                punches.Add(clientId, punchId);
+                                NATRequestPosition = 0;
+                                NATRequest.WriteByte(ref NATRequestPosition, (byte)OpCodes.RequestNATConnection);
+                                NATRequest.WriteString(ref NATRequestPosition, punchId);
+                                transport.ServerSend(clientId, new ArraySegment<byte>(NATRequest, 0, NATRequestPosition));
                             }
                         };
 
-                        _relay = new RelayHandler(transport.GetMaxPacketSize(0));
+                        relay = new RelayHandler(transport.GetMaxPacketSize(0));
 
-                        transport.OnServerReceive = _relay.HandleMessage;
-                        transport.OnServerDisconnected = (clientID) =>
+                        transport.OnServerReceive = relay.HandleMessage;
+                        transport.OnServerDisconnected = clientId =>
                         {
-                            _currentConnections.Remove(clientID);
-                            _relay.HandleDisconnect(clientID);
+                            clients.Remove(clientId);
+                            relay.HandleDisconnect(clientId);
 
-                            if (NATConnections.ContainsKey(clientID))
-                                NATConnections.Remove(clientID);
+                            if (connections.ContainsKey(clientId))
+                            {
+                                connections.Remove(clientId);
+                            }
 
-                            if (_pendingNATPunches.TryGetFirst(clientID, out _))
-                                _pendingNATPunches.Remove(clientID);
+                            if (punches.TryGetFirst(clientId, out _))
+                            {
+                                punches.Remove(clientId);
+                            }
                         };
 
                         transport.StartServer();
 
                         WriteLogMessage("OK", ConsoleColor.Green);
 
-                        if (conf.UseEndpoint)
+                        if (setting.UseEndPoint)
                         {
-                            WriteLogMessage("\nStarting Endpoint Service... ", ConsoleColor.White, true);
+                            WriteLogMessage("开启端口服务...", ConsoleColor.White, true);
                             var endpoint = new EndpointServer();
 
-                            if (endpoint.Start(conf.EndpointPort))
+                            if (endpoint.Start(setting.EndpointPort))
                             {
                                 WriteLogMessage("OK", ConsoleColor.Green);
                             }
                             else
                             {
-                                WriteLogMessage("FAILED\nPlease run as administrator or check if port is in use.", ConsoleColor.DarkRed);
+                                WriteLogMessage("请以管理员身份运行或检查端口是否被占用。", ConsoleColor.Red);
                             }
                         }
 
-                        if (conf.EnableNATPunchtroughServer)
+                        if (setting.EnableNATPunchServer)
                         {
-                            WriteLogMessage("\nStarting NatPunchthrough Socket... ", ConsoleColor.White, true);
+                            WriteLogMessage("开启内网穿透...", ConsoleColor.White, true);
 
                             try
                             {
-                                _punchServer = new UdpClient(conf.NATPunchtroughPort);
+                                punchServer = new UdpClient(setting.NATPunchtroughPort);
 
-                                WriteLogMessage("OK\n", ConsoleColor.Green, true);
+                                WriteLogMessage("OK", ConsoleColor.Green, true);
 
-                                WriteLogMessage("\nStarting NatPunchthrough Thread... ", ConsoleColor.White, true);
-                                var natThread = new Thread(new ThreadStart(RunNATPunchLoop));
+                                WriteLogMessage("开启内网穿透线程...", ConsoleColor.White, true);
+                                var thread = new Thread(RunNATPunchLoop);
 
                                 try
                                 {
-                                    natThread.Start();
+                                    thread.Start();
                                 }
                                 catch (Exception e)
                                 {
-                                    WriteLogMessage("FAILED\n" + e, ConsoleColor.DarkRed);
+                                    WriteLogMessage(e.ToString(), ConsoleColor.Red);
                                 }
                             }
                             catch (Exception e)
                             {
-                                WriteLogMessage("FAILED\nCheck if port is in use.", ConsoleColor.DarkRed, true);
-                                Console.WriteLine(e);
+                                WriteLogMessage("请检查端口是否被占用...", ConsoleColor.Red);
+                                WriteLogMessage(e.ToString(), ConsoleColor.Red);
                             }
                         }
                     }
                     else
                     {
-                        WriteLogMessage("FAILED\nClass not found, make sure to included namespaces!", ConsoleColor.DarkRed);
+                        WriteLogMessage("没有找到传输类!", ConsoleColor.Red);
                         Console.ReadKey();
                         Environment.Exit(0);
                     }
                 }
                 catch (Exception e)
                 {
-                    WriteLogMessage("FAILED\nException: " + e, ConsoleColor.DarkRed);
+                    WriteLogMessage(e.ToString(), ConsoleColor.Red);
                     Console.ReadKey();
                     Environment.Exit(0);
                 }
@@ -186,82 +183,68 @@ namespace JFramework.Net
 
             while (true)
             {
-                if (_updateMethod != null) _updateMethod.Invoke(transport, null);
-                if (_lateUpdateMethod != null) _lateUpdateMethod.Invoke(transport, null);
+                updateMethod?.Invoke(transport, null);
+                lateUpdateMethod?.Invoke(transport, null);
+                heartBeat++;
 
-                _currentHeartbeatTimer++;
-
-                if (_currentHeartbeatTimer >= conf.UpdateHeartbeatInterval)
+                if (heartBeat >= setting.UpdateHeartbeatInterval)
                 {
-                    _currentHeartbeatTimer = 0;
-
-                    for (int i = 0; i < _currentConnections.Count; i++)
-                        transport.ServerSend(_currentConnections[i], new ArraySegment<byte>(new byte[] { 200 }));
+                    heartBeat = 0;
+                    foreach (var client in clients)
+                    {
+                        transport.ServerSend(client, new ArraySegment<byte>(new byte[] { 200 }));
+                    }
 
                     GC.Collect();
                 }
 
-                await Task.Delay(conf.UpdateLoopTime);
+                await Task.Delay(setting.UpdateLoopTime);
             }
         }
 
-        void RunNATPunchLoop()
+        private void RunNATPunchLoop()
         {
-            WriteLogMessage("OK\n", ConsoleColor.Green);
-            IPEndPoint remoteEndpoint = new IPEndPoint(IPAddress.Any, conf.NATPunchtroughPort);
-
-            // Stock Data server sends to everyone:
-            var serverResponse = new byte[1] { 1 };
-
-            byte[] readData;
-            bool isConnectionEstablishment;
-            int pos;
-            string connectionID;
+            WriteLogMessage("OK", ConsoleColor.Green);
+            var endPoint = new IPEndPoint(IPAddress.Any, setting.NATPunchtroughPort);
+            var serverResponse = new byte[] { 1 };
 
             while (true)
             {
-                readData = _punchServer.Receive(ref remoteEndpoint);
-                pos = 0;
+                var readData = punchServer.Receive(ref endPoint);
+                var position = 0;
                 try
                 {
-                    isConnectionEstablishment = readData.ReadBool(ref pos);
-
-                    if (isConnectionEstablishment)
+                    if (readData.ReadBool(ref position))
                     {
-                        connectionID = readData.ReadString(ref pos);
-
-                        if (_pendingNATPunches.TryGetSecond(connectionID, out pos))
+                        var clientId = readData.ReadString(ref position);
+                        if (punches.TryGetSecond(clientId, out position))
                         {
-                            NATConnections.Add(pos, new IPEndPoint(remoteEndpoint.Address, remoteEndpoint.Port));
-                            _pendingNATPunches.Remove(pos);
-                            Console.WriteLine("Client Successfully Established Puncher Connection. " + remoteEndpoint.ToString());
+                            connections.Add(position, new IPEndPoint(endPoint.Address, endPoint.Port));
+                            punches.Remove(position);
+                            WriteLogMessage("客户端成功建立内网穿透连接。" + endPoint);
                         }
                     }
 
-                    _punchServer.Send(serverResponse, 1, remoteEndpoint);
+                    punchServer.Send(serverResponse, 1, endPoint);
                 }
                 catch
                 {
-                    // ignore, packet got fucked up or something.
+                    // ignored
                 }
             }
         }
 
-        static void WriteLogMessage(string message, ConsoleColor color = ConsoleColor.White, bool oneLine = false)
+        private static void WriteLogMessage(string message, ConsoleColor color = ConsoleColor.White, bool oneLine = false)
         {
             Console.ForegroundColor = color;
             if (oneLine)
+            {
                 Console.Write(message);
+            }
             else
+            {
                 Console.WriteLine(message);
-        }
-
-        void CheckMethods(Type type)
-        {
-            _awakeMethod = type.GetMethod("Awake", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            _startMethod = type.GetMethod("Start", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            _updateMethod = type.GetMethod("Update", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            _lateUpdateMethod = type.GetMethod("LateUpdate", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            }
         }
     }
 }
