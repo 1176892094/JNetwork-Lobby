@@ -13,31 +13,30 @@ namespace JFramework.Net
 {
     internal class Program
     {
+        public readonly Dictionary<int, IPEndPoint> connections = new Dictionary<int, IPEndPoint>();
         public static Setting setting;
         public static Program instance;
         public static Transport transport;
 
         private int heartBeat;
         private DateTime startTime;
+        private RelayEvent relay;
         private MethodInfo awakeMethod;
         private MethodInfo startMethod;
         private MethodInfo updateMethod;
-        private MethodInfo lateUpdateMethod;
-        private RelayHandler relay;
-
+        private MethodInfo lateMethod;
         private UdpClient punchServer;
         private int NATRequestPosition;
         private readonly byte[] NATRequest = new byte[500];
         private readonly List<int> clients = new List<int>();
         private readonly HashMap<int, string> punches = new HashMap<int, string>();
-        public readonly Dictionary<int, IPEndPoint> connections = new Dictionary<int, IPEndPoint>();
 
-        private const string CONFIG_PATH = "setting.json";
+        private const string SETTING = "setting.json";
 
         public static void Main(string[] args) => new Program().MainAsync().GetAwaiter().GetResult();
 
-        public int GetConnections() => clients.Count;
-        public TimeSpan GetUptime() => DateTime.Now - startTime;
+        public int Count() => clients.Count;
+        public TimeSpan SinceTime() => DateTime.Now - startTime;
         public int GetPublicRoomCount() => relay.rooms.Count(x => x.isPublic);
         public List<Room> GetRooms() => relay.rooms;
 
@@ -47,16 +46,16 @@ namespace JFramework.Net
             startTime = DateTime.Now;
             WriteLogMessage("启动中继服务器!", ConsoleColor.Green);
 
-            if (!File.Exists(CONFIG_PATH))
+            if (!File.Exists(SETTING))
             {
-                await File.WriteAllTextAsync(CONFIG_PATH, JsonConvert.SerializeObject(new Setting(), Formatting.Indented));
+                await File.WriteAllTextAsync(SETTING, JsonConvert.SerializeObject(new Setting(), Formatting.Indented));
                 WriteLogMessage("请将 setting.json 文件配置正确并重新运行!", ConsoleColor.Yellow);
                 Console.ReadKey();
                 Environment.Exit(0);
             }
             else
             {
-                setting = JsonConvert.DeserializeObject<Setting>(await File.ReadAllTextAsync(CONFIG_PATH));
+                setting = JsonConvert.DeserializeObject<Setting>(await File.ReadAllTextAsync(SETTING));
                 WriteLogMessage("加载程序集...", ConsoleColor.White, true);
                 try
                 {
@@ -74,8 +73,7 @@ namespace JFramework.Net
                             awakeMethod = type.GetMethod("Awake", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                             startMethod = type.GetMethod("Start", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                             updateMethod = type.GetMethod("Update", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                            lateUpdateMethod = type.GetMethod("LateUpdate",
-                                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                            lateMethod = type.GetMethod("LateUpdate", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                         }
 
                         WriteLogMessage("OK", ConsoleColor.Green);
@@ -87,7 +85,7 @@ namespace JFramework.Net
                         {
                             WriteLogMessage($"客户端 {clientId} 连接到传输。", ConsoleColor.Cyan);
                             clients.Add(clientId);
-                            relay.ClientConnected(clientId);
+                            relay.ServerConnected(clientId);
                             if (setting.EnableNATPunchServer)
                             {
                                 var punchId = Guid.NewGuid().ToString();
@@ -99,13 +97,13 @@ namespace JFramework.Net
                             }
                         };
 
-                        relay = new RelayHandler(transport.GetMaxPacketSize(0));
+                        relay = new RelayEvent(transport.GetMaxPacketSize(0));
 
-                        transport.OnServerReceive = relay.HandleMessage;
+                        transport.OnServerReceive = relay.ServerReceive;
                         transport.OnServerDisconnected = clientId =>
                         {
                             clients.Remove(clientId);
-                            relay.HandleDisconnect(clientId);
+                            relay.ServerDisconnected(clientId);
 
                             if (connections.ContainsKey(clientId))
                             {
@@ -121,12 +119,10 @@ namespace JFramework.Net
                         transport.StartServer();
 
                         WriteLogMessage("OK", ConsoleColor.Green);
-
                         if (setting.UseEndPoint)
                         {
                             WriteLogMessage("开启端口服务...", ConsoleColor.White, true);
-                            var endpoint = new EndpointServer();
-
+                            var endpoint = new RelayServer();
                             if (endpoint.Start(setting.EndpointPort))
                             {
                                 WriteLogMessage("OK", ConsoleColor.Green);
@@ -140,16 +136,12 @@ namespace JFramework.Net
                         if (setting.EnableNATPunchServer)
                         {
                             WriteLogMessage("开启内网穿透...", ConsoleColor.White, true);
-
                             try
                             {
-                                punchServer = new UdpClient(setting.NATPunchtroughPort);
-
-                                WriteLogMessage("OK", ConsoleColor.Green, true);
-
+                                punchServer = new UdpClient(setting.NATPunchPort);
+                                WriteLogMessage("OK", ConsoleColor.Green);
                                 WriteLogMessage("开启内网穿透线程...", ConsoleColor.White, true);
-                                var thread = new Thread(RunNATPunchLoop);
-
+                                var thread = new Thread(PunchThread);
                                 try
                                 {
                                     thread.Start();
@@ -184,7 +176,7 @@ namespace JFramework.Net
             while (true)
             {
                 updateMethod?.Invoke(transport, null);
-                lateUpdateMethod?.Invoke(transport, null);
+                lateMethod?.Invoke(transport, null);
                 heartBeat++;
 
                 if (heartBeat >= setting.UpdateHeartbeatInterval)
@@ -202,10 +194,10 @@ namespace JFramework.Net
             }
         }
 
-        private void RunNATPunchLoop()
+        private void PunchThread()
         {
             WriteLogMessage("OK", ConsoleColor.Green);
-            var endPoint = new IPEndPoint(IPAddress.Any, setting.NATPunchtroughPort);
+            var endPoint = new IPEndPoint(IPAddress.Any, setting.NATPunchPort);
             var serverResponse = new byte[] { 1 };
 
             while (true)

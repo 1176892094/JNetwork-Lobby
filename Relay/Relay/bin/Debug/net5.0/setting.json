@@ -1,0 +1,12 @@
+{
+  "Assembly": "Transport.dll",
+  "TransportClass": "JFramework.Net.NetworkTransport",
+  "AuthenticationKey": "Secret Auth Key",
+  "UpdateLoopTime": 10,
+  "UpdateHeartbeatInterval": 100,
+  "UseEndPoint": true,
+  "EndpointPort": 8080,
+  "EndpointServerList": true,
+  "EnableNATPunchServer": true,
+  "NATPunchPort": 7776
+}

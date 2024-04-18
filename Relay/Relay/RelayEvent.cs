@@ -5,20 +5,20 @@ using System.Linq;
 
 namespace JFramework.Net
 {
-    public class RelayHandler
+    public class RelayEvent
     {
         private readonly int maxPacketSize;
         private readonly ArrayPool<byte> buffers;
         private readonly List<int> pendingAuthentication = new List<int>();
         public readonly List<Room> rooms = new List<Room>();
 
-        public RelayHandler(int maxPacketSize)
+        public RelayEvent(int maxPacketSize)
         {
             this.maxPacketSize = maxPacketSize;
             buffers = ArrayPool<byte>.Create(maxPacketSize, 50);
         }
 
-        public void ClientConnected(int clientId)
+        public void ServerConnected(int clientId)
         {
             pendingAuthentication.Add(clientId);
             var buffer = buffers.Rent(1);
@@ -28,7 +28,7 @@ namespace JFramework.Net
             buffers.Return(buffer);
         }
 
-        public void HandleMessage(int clientId, ArraySegment<byte> segmentData, Channel channel)
+        public void ServerReceive(int clientId, ArraySegment<byte> segmentData, Channel channel)
         {
             try
             {
@@ -107,7 +107,7 @@ namespace JFramework.Net
             }
         }
 
-        public void HandleDisconnect(int clientId)
+        public void ServerDisconnected(int clientId)
         {
             LeaveRoom(clientId);
         }

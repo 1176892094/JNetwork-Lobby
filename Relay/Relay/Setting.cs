@@ -1,5 +1,8 @@
-﻿namespace JFramework.Net
+﻿using System;
+
+namespace JFramework.Net
 {
+    [Serializable]
     internal class Setting
     {
         public string Assembly = "Transport.dll";
@@ -11,6 +14,6 @@
         public ushort EndpointPort = 8080;
         public bool EndpointServerList = true;
         public bool EnableNATPunchServer = true;
-        public ushort NATPunchtroughPort = 7776;
+        public ushort NATPunchPort = 7776;
     }
 }

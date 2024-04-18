@@ -10,16 +10,16 @@ using System.Threading.Tasks;
 namespace JFramework.Net
 {
     [RestResource]
-    public class Endpoint
+    public class RelayPeer
     {
         private List<Room> rooms => Program.instance.GetRooms();
 
         private RelayStats stats => new RelayStats
         {
-            ConnectedClients = Program.instance.GetConnections(),
+            ConnectedClients = Program.instance.Count(),
             RoomCount = Program.instance.GetRooms().Count,
             PublicRoomCount = Program.instance.GetPublicRoomCount(),
-            Uptime = Program.instance.GetUptime()
+            Uptime = Program.instance.SinceTime()
         };
 
         [RestRoute("Get", "/api/stats")]
@@ -58,7 +58,7 @@ namespace JFramework.Net
         }
     }
 
-    public class EndpointServer
+    public class RelayServer
     {
         public bool Start(ushort port = 8080)
         {
