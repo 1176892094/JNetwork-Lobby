@@ -22,8 +22,9 @@ namespace JFramework.Net
             position += sizeof(T);
         }
 
-        public static unsafe void Deserialize<T>(this byte[] data, ref int position, out T value) where T : unmanaged
+        public static unsafe T Deserialize<T>(this byte[] data, ref int position) where T : unmanaged
         {
+            T value;
             fixed (byte* ptr = &data[position])
             {
 #if UNITY_ANDROID
@@ -36,96 +37,97 @@ namespace JFramework.Net
             }
 
             position += sizeof(T);
+            return value;
         }
 
-        public static void Write(this byte[] data, ref int position, byte value)
+        public static void WriteByte(this byte[] data, ref int position, byte value)
         {
             Serialize(data, ref position, value);
         }
 
-        public static void Read(this byte[] data, ref int position, out byte value)
+        public static byte ReadByte(this byte[] data, ref int position)
         {
-            Deserialize(data, ref position, out value);
+            return data.Deserialize<byte>(ref position);
         }
 
-        public static void Write(this byte[] data, ref int position, int value)
+        public static void WriteInt(this byte[] data, ref int position, int value)
         {
             Serialize(data, ref position, value);
         }
 
-        public static void Read(this byte[] data, ref int position, out int value)
+        public static int ReadInt(this byte[] data, ref int position)
         {
-            Deserialize(data, ref position, out value);
+            return data.Deserialize<int>(ref position);
         }
 
-        public static void Write(this byte[] data, ref int position, bool value)
+        public static void WriteBool(this byte[] data, ref int position, bool value)
         {
             Serialize(data, ref position, (byte)(value ? 1 : 0));
         }
 
-        public static void Read(this byte[] data, ref int position, out bool value)
+        public static bool ReadBool(this byte[] data, ref int position)
         {
-            Deserialize(data, ref position, out byte param);
-            value = param != 0;
+            return data.Deserialize<byte>(ref position) != 0;
         }
 
-        public static void Write(this byte[] data, ref int position, char value)
+        public static void WriteChar(this byte[] data, ref int position, char value)
         {
             Serialize(data, ref position, (ushort)value);
         }
 
-        public static void Read(this byte[] data, ref int position, out char value)
+        public static char ReadChar(this byte[] data, ref int position)
         {
-            Deserialize(data, ref position, out ushort param);
-            value = (char)param;
+            return (char)data.Deserialize<ushort>(ref position);
         }
 
-        public static void Write(this byte[] data, ref int position, string value)
+        public static void WriteString(this byte[] data, ref int position, string value)
         {
             if (string.IsNullOrWhiteSpace(value))
             {
-                data.Write(ref position, 0);
+                data.WriteInt(ref position, 0);
                 return;
             }
 
-            data.Write(ref position, value.Length);
+            data.WriteInt(ref position, value.Length);
             foreach (var c in value)
             {
-                data.Write(ref position, c);
+                data.WriteChar(ref position, c);
             }
         }
 
-        public static void Read(this byte[] data, ref int position, out string value)
+        public static string ReadString(this byte[] data, ref int position)
         {
-            data.Read(ref position, out int size);
-            value = default;
-            for (int i = 0; i < size; i++)
+            var length = data.ReadInt(ref position);
+            string value = default;
+            for (int i = 0; i < length; i++)
             {
-                data.Read(ref position, out char c);
-                value += c;
+                value += data.ReadChar(ref position);
             }
+
+            return value;
         }
 
-        public static void Write(this byte[] data, ref int position, byte[] value)
+        public static void WriteBytes(this byte[] data, ref int position, byte[] value)
         {
-            data.Write(ref position, value.Length);
+            data.WriteInt(ref position, value.Length);
             foreach (var b in value)
             {
-                data.Write(ref position, b);
+                data.WriteByte(ref position, b);
             }
         }
 
-        public static void Read(this byte[] data, ref int position, out byte[] value)
+        public static byte[] ReadBytes(this byte[] data, ref int position)
         {
-            data.Read(ref position, out int size);
-            value = new byte[size];
-            for (int i = 0; i < size; i++)
+            var length = data.ReadInt(ref position);
+            var value = new byte[length];
+            for (int i = 0; i < length; i++)
             {
-                data.Read(ref position, out byte b);
-                value[i] = b;
+                value[i] = data.ReadByte(ref position);
             }
-        }
 
+            return value;
+        }
+        
         public static string Compress(this string text)
         {
             byte[] buffer = Encoding.UTF8.GetBytes(text);
@@ -145,21 +147,25 @@ namespace JFramework.Net
             Buffer.BlockCopy(BitConverter.GetBytes(buffer.Length), 0, gZipBuffer, 0, 4);
             return Convert.ToBase64String(gZipBuffer);
         }
-        
-        public static string Decompress(this string text)
-        {
-            byte[] gZipBuffer = Convert.FromBase64String(text);
-            using var memoryStream = new MemoryStream();
-            int dataLength = BitConverter.ToInt32(gZipBuffer, 0);
-            memoryStream.Write(gZipBuffer, 4, gZipBuffer.Length - 4);
-            var buffer = new byte[dataLength];
-            memoryStream.Position = 0;
-            using (var gZipStream = new GZipStream(memoryStream, CompressionMode.Decompress))
-            {
-                gZipStream.Read(buffer, 0, buffer.Length);
-            }
 
-            return Encoding.UTF8.GetString(buffer);
+        public static string Decompress(this string compressedText)
+        {
+            byte[] gZipBuffer = Convert.FromBase64String(compressedText);
+            using (var memoryStream = new MemoryStream())
+            {
+                int dataLength = BitConverter.ToInt32(gZipBuffer, 0);
+                memoryStream.Write(gZipBuffer, 4, gZipBuffer.Length - 4);
+
+                var buffer = new byte[dataLength];
+
+                memoryStream.Position = 0;
+                using (var gZipStream = new GZipStream(memoryStream, CompressionMode.Decompress))
+                {
+                    gZipStream.Read(buffer, 0, buffer.Length);
+                }
+
+                return Encoding.UTF8.GetString(buffer);
+            }
         }
     }
 }

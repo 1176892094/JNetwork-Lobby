@@ -55,7 +55,7 @@ namespace JFramework.Net
         /// </summary>
         /// <param name="segment">传入发送的数据</param>
         /// <param name="channel">传入通道</param>
-        public abstract void ClientSend(ArraySegment<byte> segment, Channel channel);
+        public abstract void ClientSend(ArraySegment<byte> segment, Channel channel = Channel.Reliable);
 
         /// <summary>
         /// 客户端断开连接
