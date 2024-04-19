@@ -91,6 +91,7 @@ namespace JFramework.Net
                                 NATRequestPosition = 0;
                                 NATRequest.WriteByte(ref NATRequestPosition, (byte)OpCodes.NATRequest);
                                 NATRequest.WriteString(ref NATRequestPosition, punchId);
+                                NATRequest.WriteInt(ref NATRequestPosition, setting.NATPunchPort);
                                 transport.ServerSend(clientId, new ArraySegment<byte>(NATRequest, 0, NATRequestPosition));
                             }
                         };
@@ -113,7 +114,8 @@ namespace JFramework.Net
                                 punches.Remove(clientId);
                             }
                         };
-                        
+
+                        transport.port = setting.EndpointPort;
                         transport.StartServer();
 
                         WriteLogMessage("OK", ConsoleColor.Green);
@@ -210,7 +212,7 @@ namespace JFramework.Net
                         {
                             connections.Add(position, new IPEndPoint(endPoint.Address, endPoint.Port));
                             punches.Remove(position);
-                            WriteLogMessage("客户端成功建立内网穿透连接。" + endPoint);
+                            WriteLogMessage("客户端成功建立内网穿透连接:" + endPoint);
                         }
                     }
 
