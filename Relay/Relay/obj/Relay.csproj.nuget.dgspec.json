@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "/Users/jinyijie/Downloads/JNetwork-Relay/Relay/Relay/Relay.csproj": {}
+    "/Users/jinyijie/Documents/GitHub/JNetwork-Relay/Relay/Relay/Relay.csproj": {}
   },
   "projects": {
-    "/Users/jinyijie/Downloads/JNetwork-Relay/Relay/Relay/Relay.csproj": {
+    "/Users/jinyijie/Documents/GitHub/JNetwork-Relay/Relay/Relay/Relay.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "/Users/jinyijie/Downloads/JNetwork-Relay/Relay/Relay/Relay.csproj",
+        "projectUniqueName": "/Users/jinyijie/Documents/GitHub/JNetwork-Relay/Relay/Relay/Relay.csproj",
         "projectName": "Relay",
-        "projectPath": "/Users/jinyijie/Downloads/JNetwork-Relay/Relay/Relay/Relay.csproj",
+        "projectPath": "/Users/jinyijie/Documents/GitHub/JNetwork-Relay/Relay/Relay/Relay.csproj",
         "packagesPath": "/Users/jinyijie/.nuget/packages/",
-        "outputPath": "/Users/jinyijie/Downloads/JNetwork-Relay/Relay/Relay/obj/",
+        "outputPath": "/Users/jinyijie/Documents/GitHub/JNetwork-Relay/Relay/Relay/obj/",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "/Users/jinyijie/.nuget/NuGet/NuGet.Config"
