@@ -23,7 +23,7 @@ namespace JFramework.Net
             pendingAuthentication.Add(clientId);
             var buffer = buffers.Rent(1);
             var position = 0;
-            buffer.WriteByte(ref position, (byte)OpCodes.AuthenticationRequest);
+            buffer.WriteByte(ref position, (byte)OpCodes.AuthorityRequest);
             Program.transport.ServerSend(clientId, new ArraySegment<byte>(buffer, 0, position));
             buffers.Return(buffer);
         }
@@ -37,7 +37,7 @@ namespace JFramework.Net
                 var opcode = (OpCodes)data.ReadByte(ref position);
                 if (pendingAuthentication.Contains(clientId))
                 {
-                    if (opcode == OpCodes.AuthenticationResponse)
+                    if (opcode == OpCodes.AuthorityResponse)
                     {
                         var response = data.ReadString(ref position);
                         if (response == Program.setting.AuthenticationKey)
@@ -45,7 +45,7 @@ namespace JFramework.Net
                             pendingAuthentication.Remove(clientId);
                             position = 0;
                             var buffer = buffers.Rent(1);
-                            buffer.WriteByte(ref position, (byte)OpCodes.Authenticated);
+                            buffer.WriteByte(ref position, (byte)OpCodes.Authority);
                             Program.transport.ServerSend(clientId, new ArraySegment<byte>(buffer, 0, position));
                         }
                     }
@@ -58,7 +58,7 @@ namespace JFramework.Net
                     case OpCodes.CreateRoom:
                         CreateRoom(clientId, data.ReadInt(ref position), data.ReadString(ref position), data.ReadBool(ref position), data.ReadString(ref position), data.ReadBool(ref position), data.ReadString(ref position), data.ReadBool(ref position), data.ReadInt(ref position));
                         break;
-                    case OpCodes.RequestID:
+                    case OpCodes.RequestId:
                         SendClientId(clientId);
                         break;
                     case OpCodes.LeaveRoom:
@@ -67,13 +67,13 @@ namespace JFramework.Net
                     case OpCodes.JoinServer:
                         JoinRoom(clientId, data.ReadInt(ref position), data.ReadBool(ref position), data.ReadString(ref position));
                         break;
-                    case OpCodes.KickPlayer:
+                    case OpCodes.RemoveClient:
                         LeaveRoom(data.ReadInt(ref position), clientId);
                         break;
                     case OpCodes.SendData:
                         ProcessData(clientId, data.ReadBytes(ref position), channel, data.ReadInt(ref position));
                         break;
-                    case OpCodes.UpdateRoomData:
+                    case OpCodes.UpdateRoom:
                         var playerRoom = GetRoomForPlayer(clientId);
                         if (playerRoom == null) return;
                         if (data.ReadBool(ref position))
@@ -121,7 +121,7 @@ namespace JFramework.Net
                     {
                         var position = 0;
                         var buffer = buffers.Rent(maxPacketSize);
-                        buffer.WriteByte(ref position, (byte)OpCodes.GetData);
+                        buffer.WriteByte(ref position, (byte)OpCodes.ReceiveData);
                         buffer.WriteBytes(ref position, clientData);
                         Program.transport.ServerSend(sendTo, new ArraySegment<byte>(buffer, 0, position), channel);
                         buffers.Return(buffer);
@@ -131,7 +131,7 @@ namespace JFramework.Net
                 {
                     var position = 0;
                     var buffer = buffers.Rent(maxPacketSize);
-                    buffer.WriteByte(ref position, (byte)OpCodes.GetData);
+                    buffer.WriteByte(ref position, (byte)OpCodes.ReceiveData);
                     buffer.WriteBytes(ref position, clientData);
                     buffer.WriteInt(ref position, clientId);
                     Program.transport.ServerSend(room.hostId, new ArraySegment<byte>(buffer, 0, position), channel);
@@ -169,7 +169,7 @@ namespace JFramework.Net
                 var buffer = buffers.Rent(500);
                 if (isDirect && Program.instance.connections.ContainsKey(clientId))
                 {
-                    buffer.WriteByte(ref position, (byte)OpCodes.DirectConnectIP);
+                    buffer.WriteByte(ref position, (byte)OpCodes.NATAddress);
                     if (Program.instance.connections[clientId].Address.Equals(room.hostIP.Address))
                     {
                         buffer.WriteString(ref position, room.hostLocalIP == localIp ? "127.0.0.1" : room.hostLocalIP);
@@ -185,7 +185,7 @@ namespace JFramework.Net
                     if (room.useNATPunch)
                     {
                         position = 0;
-                        buffer.WriteByte(ref position, (byte)OpCodes.DirectConnectIP);
+                        buffer.WriteByte(ref position, (byte)OpCodes.NATAddress);
                         Console.WriteLine(Program.instance.connections[clientId].Address.ToString());
                         buffer.WriteString(ref position, Program.instance.connections[clientId].Address.ToString());
                         buffer.WriteInt(ref position, Program.instance.connections[clientId].Port);
@@ -197,7 +197,7 @@ namespace JFramework.Net
                     return;
                 }
 
-                buffer.WriteByte(ref position, (byte)OpCodes.ServerJoined);
+                buffer.WriteByte(ref position, (byte)OpCodes.JoinServerAfter);
                 buffer.WriteInt(ref position, clientId);
                 Program.transport.ServerSend(clientId, new ArraySegment<byte>(buffer, 0, position));
                 Program.transport.ServerSend(room.hostId, new ArraySegment<byte>(buffer, 0, position));
@@ -207,7 +207,7 @@ namespace JFramework.Net
 
             position = 0;
             var sendBuffer = buffers.Rent(1);
-            sendBuffer.WriteByte(ref position, (byte)OpCodes.ServerLeft);
+            sendBuffer.WriteByte(ref position, (byte)OpCodes.LeaveServer);
             Program.transport.ServerSend(clientId, new ArraySegment<byte>(sendBuffer, 0, position));
             buffers.Return(sendBuffer);
         }
@@ -235,7 +235,7 @@ namespace JFramework.Net
             rooms.Add(room);
             var position = 0;
             var buffer = buffers.Rent(5);
-            buffer.WriteByte(ref position, (byte)OpCodes.RoomCreated);
+            buffer.WriteByte(ref position, (byte)OpCodes.CreateRoomAfter);
             buffer.WriteInt(ref position, clientId);
             Program.transport.ServerSend(clientId, new ArraySegment<byte>(buffer, 0, position));
             buffers.Return(buffer);
@@ -250,7 +250,7 @@ namespace JFramework.Net
                 {
                     var position = 0;
                     var buffer = buffers.Rent(1);
-                    buffer.WriteByte(ref position, (byte)OpCodes.ServerLeft);
+                    buffer.WriteByte(ref position, (byte)OpCodes.LeaveServer);
                     foreach (var id in room.clients)
                     {
                         Program.transport.ServerSend(id, new ArraySegment<byte>(buffer, 0, position));
@@ -271,7 +271,7 @@ namespace JFramework.Net
                 {
                     var position = 0;
                     var buffer = buffers.Rent(5);
-                    buffer.WriteByte(ref position, (byte)OpCodes.PlayerDisconnected);
+                    buffer.WriteByte(ref position, (byte)OpCodes.Disconnect);
                     buffer.WriteInt(ref position, clientId);
                     Program.transport.ServerSend(room.hostId, new ArraySegment<byte>(buffer, 0, position));
                     buffers.Return(buffer);
@@ -295,7 +295,7 @@ namespace JFramework.Net
         {
             var position = 0;
             var buffer = buffers.Rent(5);
-            buffer.WriteByte(ref position, (byte)OpCodes.GetID);
+            buffer.WriteByte(ref position, (byte)OpCodes.ResponseId);
             buffer.WriteInt(ref position, clientId);
             Program.transport.ServerSend(clientId, new ArraySegment<byte>(buffer, 0, position));
             buffers.Return(buffer);

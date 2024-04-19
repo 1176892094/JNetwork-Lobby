@@ -89,7 +89,7 @@ namespace JFramework.Net
                                 var punchId = Guid.NewGuid().ToString();
                                 punches.Add(clientId, punchId);
                                 NATRequestPosition = 0;
-                                NATRequest.WriteByte(ref NATRequestPosition, (byte)OpCodes.RequestNATConnection);
+                                NATRequest.WriteByte(ref NATRequestPosition, (byte)OpCodes.NATRequest);
                                 NATRequest.WriteString(ref NATRequestPosition, punchId);
                                 transport.ServerSend(clientId, new ArraySegment<byte>(NATRequest, 0, NATRequestPosition));
                             }

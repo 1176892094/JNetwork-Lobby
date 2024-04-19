@@ -28,28 +28,28 @@ namespace JFramework.Net
         Unreliable = 2
     }
 
-    public enum OpCodes : byte
+    public enum OpCodes
     {
         Default = 0,
-        RequestID = 1,
-        JoinServer = 2,
-        SendData = 3,
-        GetID = 4,
-        ServerJoined = 5,
-        GetData = 6,
-        CreateRoom = 7,
-        ServerLeft = 8,
-        PlayerDisconnected = 9,
-        RoomCreated = 10,
-        LeaveRoom = 11,
-        KickPlayer = 12,
-        AuthenticationRequest = 13,
-        AuthenticationResponse = 14,
-        Authenticated = 17,
-        UpdateRoomData = 18,
-        ServerConnectionData = 19,
-        RequestNATConnection = 20,
-        DirectConnectIP = 21
+        RequestId = 1,
+        ResponseId = 2,
+        JoinServer = 3,
+        JoinServerAfter = 4,
+        CreateRoom = 5,
+        CreateRoomAfter = 6,
+        UpdateRoom = 7,
+        LeaveRoom = 8,
+        SendData = 9,
+        ReceiveData = 10,
+        LeaveServer = 11,
+        Disconnect = 12,
+        RemoveClient = 13,
+        Authority = 14,
+        AuthorityRequest = 15,
+        AuthorityResponse = 16,
+        ServerConnectionData = 17,
+        NATRequest = 18,
+        NATAddress = 19
     }
 
     [Serializable]
