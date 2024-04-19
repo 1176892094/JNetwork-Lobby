@@ -5,14 +5,14 @@ using System.Linq;
 
 namespace JFramework.Net
 {
-    public class RelayEvent
+    public class RelayHelper
     {
         private readonly int maxPacketSize;
         private readonly ArrayPool<byte> buffers;
         private readonly List<int> pendingAuthentication = new List<int>();
         public readonly List<Room> rooms = new List<Room>();
 
-        public RelayEvent(int maxPacketSize)
+        public RelayHelper(int maxPacketSize)
         {
             this.maxPacketSize = maxPacketSize;
             buffers = ArrayPool<byte>.Create(maxPacketSize, 50);
@@ -34,7 +34,13 @@ namespace JFramework.Net
             {
                 var data = segmentData.Array;
                 var position = segmentData.Offset;
-                var opcode = (OpCodes)data.ReadByte(ref position);
+                var key = data.ReadByte(ref position);
+                var opcode = (OpCodes)key;
+                if (key < 200)
+                {
+                    Console.WriteLine(opcode);
+                }
+             
                 if (pendingAuthentication.Contains(clientId))
                 {
                     if (opcode == OpCodes.AuthorityResponse)

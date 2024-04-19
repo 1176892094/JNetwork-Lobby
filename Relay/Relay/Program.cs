@@ -20,7 +20,7 @@ namespace JFramework.Net
 
         private int heartBeat;
         private DateTime startTime;
-        private RelayEvent relay;
+        private RelayHelper relay;
         private MethodInfo awakeMethod;
         private MethodInfo startMethod;
         private MethodInfo updateMethod;
@@ -95,7 +95,7 @@ namespace JFramework.Net
                             }
                         };
 
-                        relay = new RelayEvent(transport.GetMaxPacketSize(0));
+                        relay = new RelayHelper(transport.GetMaxPacketSize(0));
 
                         transport.OnServerReceive = relay.ServerReceive;
                         transport.OnServerDisconnected = clientId =>
