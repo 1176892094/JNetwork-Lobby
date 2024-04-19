@@ -24,7 +24,6 @@ namespace JFramework.Net
         private MethodInfo awakeMethod;
         private MethodInfo startMethod;
         private MethodInfo updateMethod;
-        private MethodInfo lateMethod;
         private UdpClient punchServer;
         private int NATRequestPosition;
         private readonly byte[] NATRequest = new byte[500];
@@ -73,7 +72,6 @@ namespace JFramework.Net
                             awakeMethod = type.GetMethod("Awake", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                             startMethod = type.GetMethod("Start", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                             updateMethod = type.GetMethod("Update", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                            lateMethod = type.GetMethod("LateUpdate", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                         }
 
                         WriteLogMessage("OK", ConsoleColor.Green);
@@ -119,11 +117,10 @@ namespace JFramework.Net
                         transport.StartServer();
 
                         WriteLogMessage("OK", ConsoleColor.Green);
-                        WriteLogMessage(GetLocalIp() + ":" + transport.port, ConsoleColor.Yellow);
                         if (setting.UseEndPoint)
                         {
                             WriteLogMessage("开启端口服务...", ConsoleColor.White, true);
-                            var endpoint = new RelayServer();
+                            var endpoint = new RelayProxyServer();
                             if (endpoint.Start(setting.EndpointPort))
                             {
                                 WriteLogMessage("OK", ConsoleColor.Green);
@@ -177,7 +174,6 @@ namespace JFramework.Net
             while (true)
             {
                 updateMethod?.Invoke(transport, null);
-                lateMethod?.Invoke(transport, null);
                 heartBeat++;
 
                 if (heartBeat >= setting.UpdateHeartbeatInterval)
@@ -238,12 +234,6 @@ namespace JFramework.Net
             {
                 Console.WriteLine(message);
             }
-        }
-        
-        private static string GetLocalIp()
-        {
-            var host = Dns.GetHostEntry(Dns.GetHostName());
-            return host.AddressList.FirstOrDefault(ip => ip.AddressFamily == AddressFamily.InterNetwork)?.ToString();
         }
     }
 }

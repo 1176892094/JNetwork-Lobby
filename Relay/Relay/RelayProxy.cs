@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 namespace JFramework.Net
 {
     [RestResource]
-    public class RelayPeer
+    public class RelayProxy
     {
         private List<Room> rooms => Program.instance.GetRooms();
 
@@ -59,7 +59,7 @@ namespace JFramework.Net
         }
     }
 
-    public class RelayServer
+    public class RelayProxyServer
     {
         public bool Start(ushort port = 8080)
         {

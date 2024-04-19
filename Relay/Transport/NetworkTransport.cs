@@ -41,6 +41,17 @@ namespace JFramework.Net
             void ServerDisconnected(int clientId) => OnServerDisconnected.Invoke(clientId);
         }
 
+        public void Start()
+        {
+            server.Connect(port);
+        }
+
+        public void Update()
+        {
+            server.EarlyUpdate();
+            server.AfterUpdate();
+        }
+
         public override void ClientConnect(Uri uri = null)
         {
             if (uri != null)
