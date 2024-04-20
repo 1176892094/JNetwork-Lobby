@@ -71,4 +71,7 @@ crashlytics-build.properties
 /[Aa]ssets/[Ss]treamingAssets/aa.meta
 /[Aa]ssets/[Ss]treamingAssets/aa/*
 
-Relay/.idea*
+Server/.idea*
+Server/global.json
+Server/Runtime/obj*
+Server/Runtime/bin*
