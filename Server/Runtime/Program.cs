@@ -36,8 +36,8 @@ namespace JFramework.Net
 
         public int Count() => clients.Count;
         public TimeSpan SinceTime() => DateTime.Now - startTime;
-        public int GetPublicRoomCount() => relay.rooms.Count(x => x.isPublic);
-        public List<Room> GetRooms() => relay.rooms;
+        public int GetPublicRoomCount() => relay.rooms.Values.Count(x => x.isPublic);
+        public List<Room> GetRooms() => relay.rooms.Values.ToList();
 
         public async Task MainAsync()
         {

@@ -8,6 +8,8 @@ public class NetworkNATPuncher : MonoBehaviour
     public bool isDebug;
     public Transport transport;
     private NetworkRelayTransport relay;
+    
+    public bool isPunch => transport is NetworkTransport;
 
     private void Awake()
     {
@@ -95,7 +97,7 @@ public class NetworkNATPuncher : MonoBehaviour
 
     public void JoinServer(string ip, int port)
     {
-        if (IsPunch())
+        if (isPunch)
         {
             SetTransportPort(port);
         }
@@ -123,11 +125,6 @@ public class NetworkNATPuncher : MonoBehaviour
         }
 
         throw new Exception("NAT模块目前只支持Udp！");
-    }
-
-    public bool IsPunch()
-    {
-        return transport is NetworkTransport;
     }
 
     public void ServerDisconnect(int clientId)

@@ -10,7 +10,8 @@ namespace JFramework.Net
         private readonly int maxPacketSize;
         private readonly ArrayPool<byte> buffers;
         private readonly List<int> pendingAuthentication = new List<int>();
-        public readonly List<Room> rooms = new List<Room>();
+        public readonly Dictionary<int, Room> clients = new Dictionary<int, Room>();
+        public readonly Dictionary<string, Room> rooms = new Dictionary<string, Room>();
 
         public RelayHelper(int maxPacketSize)
         {
@@ -40,7 +41,7 @@ namespace JFramework.Net
                 {
                     Console.WriteLine(opcode);
                 }
-             
+
                 if (pendingAuthentication.Contains(clientId))
                 {
                     if (opcode == OpCodes.AuthorityResponse)
@@ -62,7 +63,9 @@ namespace JFramework.Net
                 switch (opcode)
                 {
                     case OpCodes.CreateRoom:
-                        CreateRoom(clientId, data.ReadInt(ref position), data.ReadString(ref position), data.ReadBool(ref position), data.ReadString(ref position), data.ReadBool(ref position), data.ReadString(ref position), data.ReadBool(ref position), data.ReadInt(ref position));
+                        CreateRoom(clientId, data.ReadInt(ref position), data.ReadString(ref position), data.ReadBool(ref position),
+                            data.ReadString(ref position), data.ReadBool(ref position), data.ReadString(ref position),
+                            data.ReadBool(ref position), data.ReadInt(ref position));
                         break;
                     case OpCodes.RequestId:
                         SendClientId(clientId);
@@ -71,7 +74,7 @@ namespace JFramework.Net
                         LeaveRoom(clientId);
                         break;
                     case OpCodes.JoinServer:
-                        JoinRoom(clientId, data.ReadInt(ref position), data.ReadBool(ref position), data.ReadString(ref position));
+                        JoinRoom(clientId, data.ReadString(ref position), data.ReadBool(ref position), data.ReadString(ref position));
                         break;
                     case OpCodes.RemoveClient:
                         LeaveRoom(data.ReadInt(ref position), clientId);
@@ -121,7 +124,7 @@ namespace JFramework.Net
             var room = GetRoomForPlayer(clientId);
             if (room != null)
             {
-                if (room.hostId == clientId)
+                if (room.clientId == clientId)
                 {
                     if (room.clients.Contains(sendTo))
                     {
@@ -140,63 +143,43 @@ namespace JFramework.Net
                     buffer.WriteByte(ref position, (byte)OpCodes.ReceiveData);
                     buffer.WriteBytes(ref position, clientData);
                     buffer.WriteInt(ref position, clientId);
-                    Program.transport.ServerSend(room.hostId, new ArraySegment<byte>(buffer, 0, position), channel);
+                    Program.transport.ServerSend(room.clientId, new ArraySegment<byte>(buffer, 0, position), channel);
                     buffers.Return(buffer);
                 }
             }
         }
 
-        private Room GetRoomForPlayer(int clientId)
-        {
-            foreach (var room in rooms)
-            {
-                if (room.hostId == clientId)
-                {
-                    return room;
-                }
-
-                if (room.clients.Contains(clientId))
-                {
-                    return room;
-                }
-            }
-
-            return null;
-        }
-
-        private void JoinRoom(int clientId, int serverId, bool isDirect, string localIp)
+        private void JoinRoom(int clientId, string serverId, bool puncher, string address)
         {
             LeaveRoom(clientId);
-            int position;
-            foreach (var room in rooms.Where(room => room.serverId == serverId && room.clients.Count < room.maxPlayers))
+            if (rooms.TryGetValue(serverId, out var room) && room.clients.Count < room.maxPlayers)
             {
                 room.clients.Add(clientId);
-                position = 0;
+                var position = 0;
                 var buffer = buffers.Rent(500);
-                if (isDirect && Program.instance.connections.ContainsKey(clientId))
+                if (puncher && Program.instance.connections.TryGetValue(clientId,out var connection))
                 {
                     buffer.WriteByte(ref position, (byte)OpCodes.NATAddress);
-                    if (Program.instance.connections[clientId].Address.Equals(room.hostIP.Address))
+                    if (connection.Address.Equals(room.proxy.Address))
                     {
-                        buffer.WriteString(ref position, room.hostLocalIP == localIp ? "127.0.0.1" : room.hostLocalIP);
+                        buffer.WriteString(ref position, room.address == address ? "127.0.0.1" : room.address);
                     }
                     else
                     {
-                        buffer.WriteString(ref position, room.hostIP.Address.ToString());
+                        buffer.WriteString(ref position, room.proxy.Address.ToString());
                     }
 
-                    buffer.WriteInt(ref position, room.useNATPunch ? room.hostIP.Port : room.port);
-                    buffer.WriteBool(ref position, room.useNATPunch);
+                    buffer.WriteInt(ref position, room.isPunch ? room.proxy.Port : room.port);
+                    buffer.WriteBool(ref position, room.isPunch);
                     Program.transport.ServerSend(clientId, new ArraySegment<byte>(buffer, 0, position));
-                    if (room.useNATPunch)
+                    if (room.isPunch)
                     {
                         position = 0;
                         buffer.WriteByte(ref position, (byte)OpCodes.NATAddress);
-                        Console.WriteLine(Program.instance.connections[clientId].Address.ToString());
-                        buffer.WriteString(ref position, Program.instance.connections[clientId].Address.ToString());
-                        buffer.WriteInt(ref position, Program.instance.connections[clientId].Port);
+                        buffer.WriteString(ref position, connection.Address.ToString());
+                        buffer.WriteInt(ref position, connection.Port);
                         buffer.WriteBool(ref position, true);
-                        Program.transport.ServerSend(room.hostId, new ArraySegment<byte>(buffer, 0, position));
+                        Program.transport.ServerSend(room.clientId, new ArraySegment<byte>(buffer, 0, position));
                     }
 
                     buffers.Return(buffer);
@@ -206,16 +189,17 @@ namespace JFramework.Net
                 buffer.WriteByte(ref position, (byte)OpCodes.JoinServerAfter);
                 buffer.WriteInt(ref position, clientId);
                 Program.transport.ServerSend(clientId, new ArraySegment<byte>(buffer, 0, position));
-                Program.transport.ServerSend(room.hostId, new ArraySegment<byte>(buffer, 0, position));
+                Program.transport.ServerSend(room.clientId, new ArraySegment<byte>(buffer, 0, position));
                 buffers.Return(buffer);
-                return;
             }
-
-            position = 0;
-            var sendBuffer = buffers.Rent(1);
-            sendBuffer.WriteByte(ref position, (byte)OpCodes.LeaveServer);
-            Program.transport.ServerSend(clientId, new ArraySegment<byte>(sendBuffer, 0, position));
-            buffers.Return(sendBuffer);
+            else
+            {
+                var position = 0;
+                var buffer = buffers.Rent(1);
+                buffer.WriteByte(ref position, (byte)OpCodes.LeaveServer);
+                Program.transport.ServerSend(clientId, new ArraySegment<byte>(buffer, 0, position));
+                buffers.Return(buffer);
+            }
         }
 
         private void CreateRoom(int clientId, int maxPlayers, string serverName, bool isPublic, string serverData, bool useDirect, string hostLocalIP, bool isPunch, int port)
@@ -224,18 +208,18 @@ namespace JFramework.Net
             Program.instance.connections.TryGetValue(clientId, out var hostIP);
             var room = new Room
             {
-                hostId = clientId,
+                clientId = clientId,
                 maxPlayers = maxPlayers,
                 serverName = serverName,
                 isPublic = isPublic,
                 serverData = serverData,
                 clients = new List<int>(),
                 serverId = GetServerId(),
-                hostIP = hostIP,
-                hostLocalIP = hostLocalIP,
-                supportsDirectConnect = hostIP != null && useDirect,
+                proxy = hostIP,
+                address = hostLocalIP,
+                isDirect = hostIP != null && useDirect,
                 port = port,
-                useNATPunch = isPunch
+                isPunch = isPunch
             };
 
             rooms.Add(room);
@@ -252,7 +236,7 @@ namespace JFramework.Net
             for (int i = 0; i < rooms.Count; i++)
             {
                 var room = rooms[i];
-                if (room.hostId == clientId)
+                if (room.clientId == clientId)
                 {
                     var position = 0;
                     var buffer = buffers.Rent(1);
@@ -268,7 +252,7 @@ namespace JFramework.Net
                     return;
                 }
 
-                if (requiredHostId >= 0 && room.hostId != requiredHostId)
+                if (requiredHostId >= 0 && room.clientId != requiredHostId)
                 {
                     continue;
                 }
@@ -279,12 +263,12 @@ namespace JFramework.Net
                     var buffer = buffers.Rent(5);
                     buffer.WriteByte(ref position, (byte)OpCodes.Disconnect);
                     buffer.WriteInt(ref position, clientId);
-                    Program.transport.ServerSend(room.hostId, new ArraySegment<byte>(buffer, 0, position));
+                    Program.transport.ServerSend(room.clientId, new ArraySegment<byte>(buffer, 0, position));
                     buffers.Return(buffer);
                 }
             }
         }
-        
+
         private int GetServerId()
         {
             var random = new Random();
