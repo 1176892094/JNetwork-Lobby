@@ -35,13 +35,7 @@ namespace JFramework.Net
             {
                 var data = segment.Array;
                 var position = segment.Offset;
-                var key = data.ReadByte(ref position);
-                var opcode = (OpCodes)key;
-                if (key < 200)
-                {
-                    Console.WriteLine(opcode);
-                }
-
+                var opcode = (OpCodes)data.ReadByte(ref position);
                 if (connections.Contains(clientId))
                 {
                     if (opcode == OpCodes.Authority)

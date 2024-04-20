@@ -109,7 +109,7 @@ public class NetworkNATPuncher : MonoBehaviour
     {
         if (isDebug)
         {
-            Debug.Log("断开的NAT客户端。");
+            Debug.Log($"断开的NAT客户端{clientId}。");
         }
 
         transport.ServerDisconnect(clientId);

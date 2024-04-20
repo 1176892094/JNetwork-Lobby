@@ -17,7 +17,7 @@ namespace JFramework.Net
         public string serverId;
         public bool isAwake = true;
         public float heratBeat = 3;
-        
+
         public ushort punchPort = 7776;
 
         public string serverKey = "Secret Key";
@@ -135,6 +135,7 @@ namespace JFramework.Net
                 else if (opcode == OpCodes.Authority)
                 {
                     isActive = true;
+                    RequestServerList();
                 }
                 else if (opcode == OpCodes.UpdateData)
                 {
@@ -171,6 +172,8 @@ namespace JFramework.Net
                             clients.Remove(client);
                         }
                     }
+
+                   
                 }
                 else if (opcode == OpCodes.CreateRoom)
                 {
@@ -256,7 +259,6 @@ namespace JFramework.Net
                             ip = Dns.GetHostEntry(address).AddressList[0];
                         }
 
-                        Debug.LogWarning(ip);
                         serverEndPoint = new IPEndPoint(ip, punchPort);
                         for (int attempts = 0; attempts < 3; attempts++)
                         {
