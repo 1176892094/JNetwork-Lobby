@@ -2,7 +2,6 @@
 using JFramework.Net;
 using UnityEngine;
 
-[RequireComponent(typeof(NetworkRelayTransport))]
 public class NetworkNATPuncher : MonoBehaviour
 {
     public bool isDebug;

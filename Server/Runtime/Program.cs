@@ -20,13 +20,11 @@ namespace JFramework.Net
 
         private int heartBeat;
         private DateTime startTime;
-        private RelayHelper relay;
+        private RelayHelper hepler;
+        private UdpClient punchClient;
         private MethodInfo awakeMethod;
-        private MethodInfo startMethod;
         private MethodInfo updateMethod;
-        private UdpClient punchServer;
-        private int NATRequestPosition;
-        private readonly byte[] NATRequest = new byte[500];
+        private readonly byte[] buffers = new byte[500];
         private readonly List<int> clients = new List<int>();
         private readonly HashMap<int, string> punches = new HashMap<int, string>();
 
@@ -36,8 +34,8 @@ namespace JFramework.Net
 
         public int Count() => clients.Count;
         public TimeSpan SinceTime() => DateTime.Now - startTime;
-        public int GetPublicRoomCount() => relay.rooms.Values.Count(x => x.isPublic);
-        public List<Room> GetRooms() => relay.rooms.Values.ToList();
+        public int GetPublicRoomCount() => hepler.rooms.Values.Count(x => x.isPublic);
+        public List<Room> GetRooms() => hepler.rooms.Values.ToList();
 
         public async Task MainAsync()
         {
@@ -70,39 +68,37 @@ namespace JFramework.Net
                         if (type != null)
                         {
                             awakeMethod = type.GetMethod("Awake", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                            startMethod = type.GetMethod("Start", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                             updateMethod = type.GetMethod("Update", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                         }
 
                         WriteLogMessage("OK", ConsoleColor.Green);
                         awakeMethod?.Invoke(transport, null);
-                        startMethod?.Invoke(transport, null);
                         WriteLogMessage("开始进行传输...", ConsoleColor.White, true);
 
                         transport.OnServerConnected = clientId =>
                         {
                             WriteLogMessage($"客户端 {clientId} 连接到传输。", ConsoleColor.Cyan);
                             clients.Add(clientId);
-                            relay.ServerConnected(clientId);
+                            hepler.ServerConnected(clientId);
                             if (setting.UseNATPuncher)
                             {
                                 var punchId = Guid.NewGuid().ToString();
                                 punches.Add(clientId, punchId);
-                                NATRequestPosition = 0;
-                                NATRequest.WriteByte(ref NATRequestPosition, (byte)OpCodes.NATRequest);
-                                NATRequest.WriteString(ref NATRequestPosition, punchId);
-                                NATRequest.WriteInt(ref NATRequestPosition, setting.NATPunchPort);
-                                transport.ServerSend(clientId, new ArraySegment<byte>(NATRequest, 0, NATRequestPosition));
+                                var position = 0;
+                                buffers.WriteByte(ref position, (byte)OpCodes.NATRequest);
+                                buffers.WriteString(ref position, punchId);
+                                buffers.WriteInt(ref position, setting.NATPunchPort);
+                                transport.ServerSend(clientId, new ArraySegment<byte>(buffers, 0, position));
                             }
                         };
 
-                        relay = new RelayHelper(transport.GetMaxPacketSize(0));
+                        hepler = new RelayHelper(transport.GetMaxPacketSize(0));
 
-                        transport.OnServerReceive = relay.ServerReceive;
+                        transport.OnServerReceive = hepler.ServerReceive;
                         transport.OnServerDisconnected = clientId =>
                         {
                             clients.Remove(clientId);
-                            relay.ServerDisconnected(clientId);
+                            hepler.ServerDisconnected(clientId);
 
                             if (connections.ContainsKey(clientId))
                             {
@@ -138,7 +134,7 @@ namespace JFramework.Net
                             WriteLogMessage("开启内网穿透...", ConsoleColor.White, true);
                             try
                             {
-                                punchServer = new UdpClient(setting.NATPunchPort);
+                                punchClient = new UdpClient(setting.NATPunchPort);
                                 WriteLogMessage("OK", ConsoleColor.Green);
                                 WriteLogMessage("开启内网穿透线程...", ConsoleColor.White, true);
                                 var thread = new Thread(PunchThread);
@@ -200,7 +196,7 @@ namespace JFramework.Net
 
             while (true)
             {
-                var readData = punchServer.Receive(ref endPoint);
+                var readData = punchClient.Receive(ref endPoint);
                 var position = 0;
                 try
                 {
@@ -215,7 +211,7 @@ namespace JFramework.Net
                         }
                     }
 
-                    punchServer.Send(serverResponse, 1, endPoint);
+                    punchClient.Send(serverResponse, 1, endPoint);
                 }
                 catch
                 {

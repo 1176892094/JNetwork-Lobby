@@ -14,7 +14,6 @@ namespace JFramework.Net
     public partial class NetworkRelayTransport : Transport
     {
         public Transport transport;
-        public NetworkNATPuncher puncher;
         public string serverId;
         public bool isAwake = true;
         public float heratBeat = 3;
@@ -40,11 +39,12 @@ namespace JFramework.Net
         private bool isActive;
         private string hostId;
         private byte[] buffers;
-        private UdpClient clientPunch;
+        private UdpClient punchClient;
         private IPEndPoint punchEndPoint;
         private IPEndPoint serverEndPoint;
         private IPEndPoint clientEndPoint;
         private SocketProxy socketProxy;
+        private NetworkNATPuncher puncher;
 
         private readonly byte[] punchData = { 1 };
         private HashMap<int, int> clients = new HashMap<int, int>();
@@ -60,6 +60,7 @@ namespace JFramework.Net
                 Debug.Log("请使用 NetworkTransport 进行传输");
             }
 
+            puncher = GetComponentInChildren<NetworkNATPuncher>();
             if (isNAT && !puncher.isPunch)
             {
                 Debug.Log("请使用 NetworkTransport 进行NAT传输");
@@ -231,16 +232,16 @@ namespace JFramework.Net
                         buffer.WriteBool(ref sendPos, true);
                         buffer.WriteString(ref sendPos, data.ReadString(ref position));
                         punchPort = (ushort)data.ReadInt(ref position);
-                        if (clientPunch == null)
+                        if (punchClient == null)
                         {
-                            clientPunch = new UdpClient { ExclusiveAddressUse = false };
+                            punchClient = new UdpClient { ExclusiveAddressUse = false };
                             while (true)
                             {
                                 try
                                 {
                                     punchEndPoint = new IPEndPoint(IPAddress.Parse(GetAddress()), Random.Range(16000, 17000));
-                                    clientPunch.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-                                    clientPunch.Client.Bind(punchEndPoint);
+                                    punchClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+                                    punchClient.Client.Bind(punchEndPoint);
                                     break;
                                 }
                                 catch
@@ -255,14 +256,15 @@ namespace JFramework.Net
                             ip = Dns.GetHostEntry(address).AddressList[0];
                         }
 
+                        Debug.LogWarning(ip);
                         serverEndPoint = new IPEndPoint(ip, punchPort);
                         for (int attempts = 0; attempts < 3; attempts++)
                         {
-                            clientPunch.Send(buffer, sendPos, serverEndPoint);
+                            punchClient.Send(buffer, sendPos, serverEndPoint);
                         }
 
 
-                        clientPunch.BeginReceive(ReceiveData, clientPunch);
+                        punchClient.BeginReceive(ReceiveData, punchClient);
                     }
                 }
             }
@@ -275,7 +277,7 @@ namespace JFramework.Net
         private void ReceiveData(IAsyncResult result)
         {
             var endPoint = new IPEndPoint(IPAddress.Any, 0);
-            var data = clientPunch.EndReceive(result, ref endPoint);
+            var data = punchClient.EndReceive(result, ref endPoint);
 
             if (!endPoint.Address.Equals(serverEndPoint.Address))
             {
@@ -309,17 +311,17 @@ namespace JFramework.Net
                 }
             }
 
-            clientPunch.BeginReceive(ReceiveData, clientPunch);
+            punchClient.BeginReceive(ReceiveData, punchClient);
         }
 
         private void ServerProcessProxyData(IPEndPoint remoteEndpoint, byte[] data)
         {
-            clientPunch.Send(data, data.Length, remoteEndpoint);
+            punchClient.Send(data, data.Length, remoteEndpoint);
         }
 
         private void ClientProcessProxyData(IPEndPoint _, byte[] data)
         {
-            clientPunch.Send(data, data.Length, clientEndPoint);
+            punchClient.Send(data, data.Length, clientEndPoint);
         }
 
         private void HeartBeat()
@@ -329,7 +331,7 @@ namespace JFramework.Net
                 var position = 0;
                 buffers.WriteByte(ref position, byte.MaxValue);
                 transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
-                clientPunch.Send(new byte[] { 0 }, 1, serverEndPoint);
+                punchClient?.Send(new byte[] { 0 }, 1, serverEndPoint);
                 var keys = new List<IPEndPoint>(proxies.Keys);
                 foreach (var key in keys.Where(ip => DateTime.Now.Subtract(proxies.GetFirst(ip).interactTime).TotalSeconds > 10))
                 {
@@ -355,7 +357,7 @@ namespace JFramework.Net
         {
             for (int i = 0; i < 10; i++)
             {
-                clientPunch.Send(punchData, 1, remoteAddress);
+                punchClient.Send(punchData, 1, remoteAddress);
                 yield return new WaitForSeconds(0.25f);
             }
         }
