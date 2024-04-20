@@ -135,20 +135,20 @@ namespace JFramework.Net
                 {
                     isActive = true;
                 }
-                else if (opcode == OpCodes.ReceiveData)
+                else if (opcode == OpCodes.UpdateData)
                 {
-                    var receive = data.ReadBytes(ref position);
+                    var bytes = data.ReadBytes(ref position);
                     if (isServer)
                     {
                         if (clients.TryGetFirst(data.ReadInt(ref position), out int clientId))
                         {
-                            OnServerReceive?.Invoke(clientId, new ArraySegment<byte>(receive), channel);
+                            OnServerReceive?.Invoke(clientId, new ArraySegment<byte>(bytes), channel);
                         }
                     }
 
                     if (isClient)
                     {
-                        OnClientReceive?.Invoke(new ArraySegment<byte>(receive), channel);
+                        OnClientReceive?.Invoke(new ArraySegment<byte>(bytes), channel);
                     }
                 }
                 else if (opcode == OpCodes.LeaveRoom)
@@ -163,11 +163,11 @@ namespace JFramework.Net
                 {
                     if (isServer)
                     {
-                        int user = data.ReadInt(ref position);
-                        if (clients.TryGetFirst(user, out int clientId))
+                        int client = data.ReadInt(ref position);
+                        if (clients.TryGetFirst(client, out int clientId))
                         {
                             OnServerDisconnected?.Invoke(clients.GetFirst(clientId));
-                            clients.Remove(user);
+                            clients.Remove(client);
                         }
                     }
                 }
@@ -452,9 +452,9 @@ namespace JFramework.Net
             else
             {
                 var position = 0;
-                buffers.WriteByte(ref position, (byte)OpCodes.SendData);
+                buffers.WriteByte(ref position, (byte)OpCodes.UpdateData);
                 buffers.WriteBytes(ref position, segment.Array.Take(segment.Count).ToArray());
-                buffers.WriteInt(ref position, 0);
+                buffers.WriteInt(ref position, -1);
                 transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
             }
         }
@@ -540,7 +540,7 @@ namespace JFramework.Net
             else
             {
                 var position = 0;
-                buffers.WriteByte(ref position, (byte)OpCodes.SendData);
+                buffers.WriteByte(ref position, (byte)OpCodes.UpdateData);
                 buffers.WriteBytes(ref position, segment.Array.Take(segment.Count).ToArray());
                 buffers.WriteInt(ref position, clients.GetSecond(clientId));
                 transport.ClientSend(new ArraySegment<byte>(buffers, 0, position), channel);
@@ -552,7 +552,7 @@ namespace JFramework.Net
             if (clients.TryGetSecond(clientId, out int relayId))
             {
                 var position = 0;
-                buffers.WriteByte(ref position, (byte)OpCodes.RemoveClient);
+                buffers.WriteByte(ref position, (byte)OpCodes.Disconnect);
                 buffers.WriteInt(ref position, relayId);
             }
 
@@ -728,10 +728,8 @@ namespace JFramework.Net
             CreateRoom = 2,
             UpdateRoom = 3,
             LeaveRoom = 4,
-            SendData = 5,
-            ReceiveData = 6,
+            UpdateData = 5,
             Disconnect = 7,
-            RemoveClient = 8,
             OnClientAuthority = 9,
             OnClientConnect = 10,
             OnServerAuthority = 11,

@@ -63,9 +63,7 @@ namespace JFramework.Net
                 switch (opcode)
                 {
                     case OpCodes.CreateRoom:
-                        CreateRoom(clientId, data.ReadInt(ref position), data.ReadString(ref position), data.ReadBool(ref position),
-                            data.ReadString(ref position), data.ReadBool(ref position), data.ReadString(ref position),
-                            data.ReadBool(ref position), data.ReadInt(ref position));
+                        CreateRoom(clientId, data.ReadInt(ref position), data.ReadString(ref position), data.ReadBool(ref position), data.ReadString(ref position), data.ReadBool(ref position), data.ReadString(ref position), data.ReadBool(ref position), data.ReadInt(ref position));
                         break;
                     case OpCodes.LeaveRoom:
                         LeaveRoom(clientId);
@@ -73,11 +71,11 @@ namespace JFramework.Net
                     case OpCodes.JoinRoom:
                         JoinRoom(clientId, data.ReadString(ref position), data.ReadBool(ref position), data.ReadString(ref position));
                         break;
-                    case OpCodes.RemoveClient:
+                    case OpCodes.Disconnect:
                         LeaveRoom(data.ReadInt(ref position), clientId);
                         break;
-                    case OpCodes.SendData:
-                        ProcessData(clientId, data.ReadBytes(ref position), channel, data.ReadInt(ref position));
+                    case OpCodes.UpdateData:
+                        UpdateData(clientId, data.ReadBytes(ref position), channel, data.ReadInt(ref position));
                         break;
                     case OpCodes.UpdateRoom:
                         if (clients.TryGetValue(clientId, out var room))
@@ -102,20 +100,19 @@ namespace JFramework.Net
             LeaveRoom(clientId);
         }
 
-        private void ProcessData(int clientId, byte[] clientData, Channel channel, int sendTo = -1)
+        private void UpdateData(int clientId, byte[] segment, Channel channel, int targetId)
         {
-            var room = clients[clientId];
-            if (room != null)
+            if (clients.TryGetValue(clientId, out var room) && room != null)
             {
                 if (room.clientId == clientId)
                 {
-                    if (room.clients.Contains(sendTo))
+                    if (room.clients.Contains(targetId))
                     {
                         var position = 0;
                         var buffer = buffers.Rent(maxPacketSize);
-                        buffer.WriteByte(ref position, (byte)OpCodes.ReceiveData);
-                        buffer.WriteBytes(ref position, clientData);
-                        Program.transport.ServerSend(sendTo, new ArraySegment<byte>(buffer, 0, position), channel);
+                        buffer.WriteByte(ref position, (byte)OpCodes.UpdateData);
+                        buffer.WriteBytes(ref position, segment);
+                        Program.transport.ServerSend(targetId, new ArraySegment<byte>(buffer, 0, position), channel);
                         buffers.Return(buffer);
                     }
                 }
@@ -123,8 +120,8 @@ namespace JFramework.Net
                 {
                     var position = 0;
                     var buffer = buffers.Rent(maxPacketSize);
-                    buffer.WriteByte(ref position, (byte)OpCodes.ReceiveData);
-                    buffer.WriteBytes(ref position, clientData);
+                    buffer.WriteByte(ref position, (byte)OpCodes.UpdateData);
+                    buffer.WriteBytes(ref position, segment);
                     buffer.WriteInt(ref position, clientId);
                     Program.transport.ServerSend(room.clientId, new ArraySegment<byte>(buffer, 0, position), channel);
                     buffers.Return(buffer);
@@ -239,7 +236,7 @@ namespace JFramework.Net
                     return;
                 }
 
-                if (hostId >= 0 && room.clientId != hostId)
+                if (hostId != -1 && room.clientId != hostId)
                 {
                     continue;
                 }
