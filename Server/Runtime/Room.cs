@@ -30,26 +30,19 @@ namespace JFramework.Net
 
     public enum OpCodes
     {
-        HeartBeat = 0,
-        RequestId = 1,
-        ResponseId = 2,
-        JoinServer = 3,
-        JoinServerAfter = 4,
-        CreateRoom = 5,
-        CreateRoomAfter = 6,
-        UpdateRoom = 7,
-        LeaveRoom = 8,
-        SendData = 9,
-        ReceiveData = 10,
-        LeaveServer = 11,
-        Disconnect = 12,
-        RemoveClient = 13,
-        Authority = 14,
-        AuthorityRequest = 15,
-        AuthorityResponse = 16,
-        ServerConnectionData = 17,
-        NATRequest = 18,
-        NATAddress = 19
+        JoinRoom = 1,
+        CreateRoom = 2,
+        UpdateRoom = 3,
+        LeaveRoom = 4,
+        SendData = 5,
+        ReceiveData = 6,
+        Disconnect = 7,
+        RemoveClient = 8,
+        OnClientAuthority = 9,
+        OnClientConnect = 10,
+        OnServerAuthority = 11,
+        NATRequest = 12,
+        NATAddress = 13,
     }
 
     [Serializable]

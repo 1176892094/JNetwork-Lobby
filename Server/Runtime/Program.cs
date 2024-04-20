@@ -109,7 +109,7 @@ namespace JFramework.Net
                                 connections.Remove(clientId);
                             }
 
-                            if (punches.TryGetFirst(clientId, out _))
+                            if (punches.Keys.Contains(clientId))
                             {
                                 punches.Remove(clientId);
                             }
@@ -177,13 +177,12 @@ namespace JFramework.Net
             {
                 updateMethod?.Invoke(transport, null);
                 heartBeat++;
-
                 if (heartBeat >= setting.UpdateHeartbeatInterval)
                 {
                     heartBeat = 0;
                     foreach (var client in clients)
                     {
-                        transport.ServerSend(client, new ArraySegment<byte>(new byte[] { 200 }));
+                        transport.ServerSend(client, new ArraySegment<byte>(new byte[] { byte.MaxValue }));
                     }
 
                     GC.Collect();

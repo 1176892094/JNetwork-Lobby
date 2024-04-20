@@ -15,7 +15,7 @@ namespace JFramework.Net
     {
         public Transport transport;
         public NetworkNATPuncher puncher;
-        public int serverId = -1;
+        public string serverId;
         public bool isAwake = true;
         public float heratBeat = 3;
         public string authority = "Secret Auth Key";
@@ -41,14 +41,14 @@ namespace JFramework.Net
         private int memberId;
         private byte[] buffers;
         private UdpClient clientPunch;
-        private IPEndPoint natEndPoint;
+        private IPEndPoint punchEndPoint;
         private IPEndPoint serverEndPoint;
         private IPEndPoint clientEndPoint;
         private SocketProxy socketProxy;
 
         private readonly byte[] punchData = { 1 };
+        private HashMap<int, int> clients = new HashMap<int, int>();
         private HashMap<int, int> connnections = new HashMap<int, int>();
-        private HashMap<int, int> relayClients = new HashMap<int, int>();
         private readonly HashMap<IPEndPoint, SocketProxy> proxies = new HashMap<IPEndPoint, SocketProxy>();
 
         public bool isPunch => puncher != null && puncher.transport != null;
@@ -124,24 +124,23 @@ namespace JFramework.Net
                 var position = segment.Offset;
                 var opcode = (OpCodes)data.ReadByte(ref position);
 
-                if (opcode == OpCodes.Authority)
-                {
-                    isActive = true;
-                    RequestServerList();
-                }
-                else if (opcode == OpCodes.AuthorityRequest)
+                if (opcode == OpCodes.OnClientConnect)
                 {
                     position = 0;
-                    buffers.WriteByte(ref position, (byte)OpCodes.AuthorityResponse);
+                    buffers.WriteByte(ref position, (byte)OpCodes.OnServerAuthority);
                     buffers.WriteString(ref position, authority);
                     transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
+                }
+                else if (opcode == OpCodes.OnClientAuthority)
+                {
+                    isActive = true;
                 }
                 else if (opcode == OpCodes.ReceiveData)
                 {
                     var receive = data.ReadBytes(ref position);
                     if (isServer)
                     {
-                        if (relayClients.TryGetFirst(data.ReadInt(ref position), out int clientId))
+                        if (clients.TryGetFirst(data.ReadInt(ref position), out int clientId))
                         {
                             OnServerReceive?.Invoke(clientId, new ArraySegment<byte>(receive), channel);
                         }
@@ -152,34 +151,31 @@ namespace JFramework.Net
                         OnClientReceive?.Invoke(new ArraySegment<byte>(receive), channel);
                     }
                 }
-                else if (opcode == OpCodes.LeaveServer)
+                else if (opcode == OpCodes.LeaveRoom)
                 {
                     if (isClient)
                     {
                         isClient = false;
                         OnClientDisconnected?.Invoke();
                     }
-
-                    RequestServerList();
                 }
                 else if (opcode == OpCodes.Disconnect)
                 {
                     if (isServer)
                     {
                         int user = data.ReadInt(ref position);
-                        if (relayClients.TryGetFirst(user, out int clientId))
+                        if (clients.TryGetFirst(user, out int clientId))
                         {
-                            OnServerDisconnected?.Invoke(relayClients.GetFirst(clientId));
-                            relayClients.Remove(user);
+                            OnServerDisconnected?.Invoke(clients.GetFirst(clientId));
+                            clients.Remove(user);
                         }
                     }
                 }
-                else if (opcode == OpCodes.CreateRoomAfter)
+                else if (opcode == OpCodes.CreateRoom)
                 {
-                    serverId = data.ReadInt(ref position);
-                    RequestServerList();
+                    serverId = data.ReadString(ref position);
                 }
-                else if (opcode == OpCodes.JoinServerAfter)
+                else if (opcode == OpCodes.JoinRoom)
                 {
                     int clientId = data.ReadInt(ref position);
                     if (isClient)
@@ -189,7 +185,7 @@ namespace JFramework.Net
 
                     if (isServer)
                     {
-                        relayClients.Add(clientId, memberId);
+                        clients.Add(clientId, memberId);
                         OnServerConnected?.Invoke(memberId);
                         memberId++;
                     }
@@ -211,13 +207,13 @@ namespace JFramework.Net
                     {
                         if (socketProxy == null && isPunch && attemptNatPunch)
                         {
-                            socketProxy = new SocketProxy(natEndPoint.Port - 1);
+                            socketProxy = new SocketProxy(punchEndPoint.Port - 1);
                             socketProxy.OnReceive += ClientProcessProxyData;
                         }
 
                         if (isPunch && attemptNatPunch)
                         {
-                            puncher.JoinServer("127.0.0.1", natEndPoint.Port - 1);
+                            puncher.JoinServer("127.0.0.1", punchEndPoint.Port - 1);
                         }
                         else
                         {
@@ -227,7 +223,7 @@ namespace JFramework.Net
                 }
                 else if (opcode == OpCodes.NATRequest)
                 {
-                    if (isPunch && GetLocalIp() != null && puncher != null)
+                    if (isPunch && GetAddress() != null)
                     {
                         var buffer = new byte[150];
                         int sendPos = 0;
@@ -242,9 +238,9 @@ namespace JFramework.Net
                             {
                                 try
                                 {
-                                    natEndPoint = new IPEndPoint(IPAddress.Parse(GetLocalIp()), Random.Range(16000, 17000));
+                                    punchEndPoint = new IPEndPoint(IPAddress.Parse(GetAddress()), Random.Range(16000, 17000));
                                     clientPunch.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-                                    clientPunch.Client.Bind(natEndPoint);
+                                    clientPunch.Client.Bind(punchEndPoint);
                                     break;
                                 }
                                 catch
@@ -256,19 +252,16 @@ namespace JFramework.Net
 
                         if (!IPAddress.TryParse(address, out var ip))
                         {
-                            address = Dns.GetHostEntry(address).AddressList[0].ToString();
-                        }
-                        else
-                        {
-                            address = ip.ToString();
+                            ip = Dns.GetHostEntry(address).AddressList[0];
                         }
 
+                        serverEndPoint = new IPEndPoint(ip, punchPort);
                         for (int attempts = 0; attempts < 3; attempts++)
                         {
-                            serverEndPoint = new IPEndPoint(IPAddress.Parse(address), punchPort);
+                            clientPunch.Send(buffer, sendPos, serverEndPoint);
                         }
 
-                        clientPunch.Send(buffer, sendPos, serverEndPoint);
+
                         clientPunch.BeginReceive(ReceiveData, clientPunch);
                     }
                 }
@@ -297,7 +290,7 @@ namespace JFramework.Net
                     }
                     else
                     {
-                        proxies.Add(endPoint, new SocketProxy(natEndPoint.Port + 1, endPoint));
+                        proxies.Add(endPoint, new SocketProxy(punchEndPoint.Port + 1, endPoint));
                         proxies.GetFirst(endPoint).OnReceive += ServerProcessProxyData;
                     }
                 }
@@ -306,7 +299,7 @@ namespace JFramework.Net
                 {
                     if (socketProxy == null)
                     {
-                        socketProxy = new SocketProxy(natEndPoint.Port - 1);
+                        socketProxy = new SocketProxy(punchEndPoint.Port - 1);
                         socketProxy.OnReceive += ClientProcessProxyData;
                     }
                     else
@@ -334,7 +327,7 @@ namespace JFramework.Net
             if (isRelay)
             {
                 var position = 0;
-                buffers.WriteByte(ref position, (byte)OpCodes.HeartBeat);
+                buffers.WriteByte(ref position, byte.MaxValue);
                 transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
                 clientPunch.Send(new byte[] { 0 }, 1, serverEndPoint);
                 var keys = new List<IPEndPoint>(proxies.Keys);
@@ -387,57 +380,21 @@ namespace JFramework.Net
             OnRoomUpdate?.Invoke();
         }
 
-        public void UpdateRoomInfo(string serverName = null, string serverData = null, bool? isPublic = null, int? playerCap = null)
+        public void UpdateRoom(string serverName, string serverData, bool isPublic, int maxPlayers)
         {
             if (isServer)
             {
                 int position = 0;
                 buffers.WriteByte(ref position, (byte)OpCodes.UpdateRoom);
-                if (!string.IsNullOrEmpty(serverName))
-                {
-                    buffers.WriteBool(ref position, true);
-                    buffers.WriteString(ref position, serverName);
-                }
-                else
-                {
-                    buffers.WriteBool(ref position, false);
-                }
-
-                if (!string.IsNullOrEmpty(serverData))
-                {
-                    buffers.WriteBool(ref position, true);
-                    buffers.WriteString(ref position, serverData);
-                }
-                else
-                {
-                    buffers.WriteBool(ref position, false);
-                }
-
-                if (isPublic != null)
-                {
-                    buffers.WriteBool(ref position, true);
-                    buffers.WriteBool(ref position, isPublic.Value);
-                }
-                else
-                {
-                    buffers.WriteBool(ref position, false);
-                }
-
-                if (playerCap != null)
-                {
-                    buffers.WriteBool(ref position, true);
-                    buffers.WriteInt(ref position, playerCap.Value);
-                }
-                else
-                {
-                    buffers.WriteBool(ref position, false);
-                }
-
+                buffers.WriteString(ref position, serverName);
+                buffers.WriteString(ref position, serverData);
+                buffers.WriteBool(ref position, isPublic);
+                buffers.WriteInt(ref position, maxPlayers);
                 transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
             }
         }
 
-        private static string GetLocalIp()
+        private static string GetAddress()
         {
             var host = Dns.GetHostEntry(Dns.GetHostName());
             return host.AddressList.FirstOrDefault(ip => ip.AddressFamily == AddressFamily.InterNetwork)?.ToString();
@@ -469,17 +426,17 @@ namespace JFramework.Net
             hostId = address;
             int position = 0;
             isNAT = false;
-            buffers.WriteByte(ref position, (byte)OpCodes.JoinServer);
+            buffers.WriteByte(ref position, (byte)OpCodes.JoinRoom);
             buffers.WriteString(ref position, hostId);
-            buffers.WriteBool(ref position, puncher != null);
+            buffers.WriteBool(ref position, isPunch);
 
-            if (GetLocalIp() == null)
+            if (GetAddress() == null)
             {
                 buffers.WriteString(ref position, "0.0.0.0");
             }
             else
             {
-                buffers.WriteString(ref position, GetLocalIp());
+                buffers.WriteString(ref position, GetAddress());
             }
 
             isClient = true;
@@ -509,7 +466,7 @@ namespace JFramework.Net
             buffers.WriteByte(ref position, (byte)OpCodes.LeaveRoom);
             transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
 
-            if (isPunch && puncher != null)
+            if (isPunch)
             {
                 puncher.ClientDisconnect();
             }
@@ -519,54 +476,56 @@ namespace JFramework.Net
         {
             if (!isRelay)
             {
-                Debug.Log("没有连接到中继，服务器启动失败。");
+                Debug.Log("没有连接到中继!");
                 return;
             }
 
             if (isClient || isServer)
             {
-                Debug.Log("不能托管，因为已经托管或连接!");
+                Debug.Log("客户端或服务器已经连接!");
                 return;
             }
 
-            isServer = true;
             memberId = 1;
-            relayClients = new HashMap<int, int>();
+            isServer = true;
+            clients = new HashMap<int, int>();
             connnections = new HashMap<int, int>();
 
-            var keys = new List<IPEndPoint>(proxies.Keys);
+            var keys = proxies.Keys.ToList();
             foreach (var key in keys)
             {
                 proxies.GetFirst(key).Dispose();
                 proxies.Remove(key);
             }
 
-            int position = 0;
+            var position = 0;
+            var clientIp = GetAddress();
             buffers.WriteByte(ref position, (byte)OpCodes.CreateRoom);
             buffers.WriteInt(ref position, maxPlayers);
             buffers.WriteString(ref position, serverName);
             buffers.WriteBool(ref position, isPublic);
             buffers.WriteString(ref position, serverData);
-            buffers.WriteBool(ref position, puncher != null && GetLocalIp() != null);
-            if (puncher != null && GetLocalIp() != null && isPunch)
-            {
-                buffers.WriteString(ref position, GetLocalIp());
-                puncher.StartServer(isPunch ? natEndPoint.Port + 1 : -1);
-            }
-            else
-            {
-                buffers.WriteString(ref position, "0.0.0.0");
-            }
-
+            buffers.WriteBool(ref position, isPunch && clientIp != null);
             if (isPunch)
             {
+                if (clientIp != null)
+                {
+                    buffers.WriteString(ref position, clientIp);
+                    puncher.StartServer(punchEndPoint.Port + 1);
+                }
+                else
+                {
+                    buffers.WriteString(ref position, "0.0.0.0");
+                }
+
                 buffers.WriteBool(ref position, true);
                 buffers.WriteInt(ref position, 0);
             }
             else
             {
+                buffers.WriteString(ref position, "0.0.0.0");
                 buffers.WriteBool(ref position, false);
-                buffers.WriteInt(ref position, puncher == null ? 1 : puncher.isPunch ? puncher.GetTransportPort() : 1);
+                buffers.WriteInt(ref position, puncher.isPunch ? puncher.transport.port : 1);
             }
 
             transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
@@ -583,14 +542,14 @@ namespace JFramework.Net
                 var position = 0;
                 buffers.WriteByte(ref position, (byte)OpCodes.SendData);
                 buffers.WriteBytes(ref position, segment.Array.Take(segment.Count).ToArray());
-                buffers.WriteInt(ref position, relayClients.GetSecond(clientId));
+                buffers.WriteInt(ref position, clients.GetSecond(clientId));
                 transport.ClientSend(new ArraySegment<byte>(buffers, 0, position), channel);
             }
         }
 
         public override void ServerDisconnect(int clientId)
         {
-            if (relayClients.TryGetSecond(clientId, out int relayId))
+            if (clients.TryGetSecond(clientId, out int relayId))
             {
                 var position = 0;
                 buffers.WriteByte(ref position, (byte)OpCodes.RemoveClient);
@@ -608,7 +567,7 @@ namespace JFramework.Net
             var builder = new UriBuilder
             {
                 Scheme = "LRM",
-                Host = serverId.ToString()
+                Host = serverId
             };
 
             return builder.Uri;
@@ -740,7 +699,7 @@ namespace JFramework.Net
                 var position = 0;
                 isClient = true;
                 isNAT = false;
-                buffers.WriteByte(ref position, (byte)OpCodes.JoinServer);
+                buffers.WriteByte(ref position, (byte)OpCodes.JoinRoom);
                 buffers.WriteString(ref position, hostId);
                 buffers.WriteBool(ref position, false);
                 transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
@@ -765,26 +724,19 @@ namespace JFramework.Net
 
         public enum OpCodes
         {
-            HeartBeat = 0,
-            RequestId = 1,
-            ResponseId = 2,
-            JoinServer = 3,
-            JoinServerAfter = 4,
-            CreateRoom = 5,
-            CreateRoomAfter = 6,
-            UpdateRoom = 7,
-            LeaveRoom = 8,
-            SendData = 9,
-            ReceiveData = 10,
-            LeaveServer = 11,
-            Disconnect = 12,
-            RemoveClient = 13,
-            Authority = 14,
-            AuthorityRequest = 15,
-            AuthorityResponse = 16,
-            ServerConnectionData = 17,
-            NATRequest = 18,
-            NATAddress = 19,
+            JoinRoom = 1,
+            CreateRoom = 2,
+            UpdateRoom = 3,
+            LeaveRoom = 4,
+            SendData = 5,
+            ReceiveData = 6,
+            Disconnect = 7,
+            RemoveClient = 8,
+            OnClientAuthority = 9,
+            OnClientConnect = 10,
+            OnServerAuthority = 11,
+            NATRequest = 12,
+            NATAddress = 13,
         }
     }
 }
