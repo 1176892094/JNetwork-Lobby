@@ -19,7 +19,7 @@ namespace JFramework.Net
         /// <summary>
         /// 客户端初始化接收
         /// </summary>
-        private bool clientInitReceive;
+        private bool isReceive;
 
         /// <summary>
         /// Udp客户端
@@ -66,7 +66,7 @@ namespace JFramework.Net
         /// </summary>
         /// <param name="data"></param>
         /// <param name="length"></param>
-        public void RemoteRelayData(byte[] data, int length)
+        public void RelayData(byte[] data, int length)
         {
             udpClient.Send(data, length);
             interactTime = DateTime.Now;
@@ -79,7 +79,7 @@ namespace JFramework.Net
         /// <param name="length"></param>
         public void ClientRelayData(byte[] data, int length)
         {
-            if (clientInitReceive)
+            if (isReceive)
             {
                 udpClient.Send(data, length, receiveEndPoint);
                 interactTime = DateTime.Now;
@@ -94,7 +94,7 @@ namespace JFramework.Net
         {
             var data = udpClient.EndReceive(result, ref receiveEndPoint);
             udpClient.BeginReceive(ReceiveData, udpClient);
-            clientInitReceive = true;
+            isReceive = true;
             interactTime = DateTime.Now;
             OnReceive?.Invoke(remoteEndPoint, data);
         }
@@ -105,6 +105,8 @@ namespace JFramework.Net
         public void Dispose()
         {
             udpClient.Dispose();
+            receiveEndPoint = null;
+            OnReceive = null;
         }
     }
 }
