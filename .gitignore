@@ -75,3 +75,5 @@ Server/.idea*
 Server/global.json
 Server/Runtime/obj*
 Server/Runtime/bin*
+Server/Transport/obj*
+Server/Transport/bin*
