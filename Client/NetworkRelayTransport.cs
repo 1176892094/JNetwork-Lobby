@@ -18,10 +18,10 @@ namespace JFramework.Net
         public string serverId;
         public bool isAwake = true;
         public float heratBeat = 3;
-        public string authority = "Secret Auth Key";
-
+        
         public ushort punchPort = 7776;
 
+        public string serverKey = "Secret Key";
         public string serverName = "Game Room";
         public string serverData = "Map 1";
         public int maxPlayers = 10;
@@ -124,14 +124,14 @@ namespace JFramework.Net
                 var position = segment.Offset;
                 var opcode = (OpCodes)data.ReadByte(ref position);
 
-                if (opcode == OpCodes.OnClientConnect)
+                if (opcode == OpCodes.Connected)
                 {
                     position = 0;
-                    buffers.WriteByte(ref position, (byte)OpCodes.OnServerAuthority);
-                    buffers.WriteString(ref position, authority);
+                    buffers.WriteByte(ref position, (byte)OpCodes.Authority);
+                    buffers.WriteString(ref position, serverKey);
                     transport.ClientSend(new ArraySegment<byte>(buffers, 0, position), channel);
                 }
-                else if (opcode == OpCodes.OnClientAuthority)
+                else if (opcode == OpCodes.Authority)
                 {
                     isActive = true;
                 }
@@ -555,6 +555,7 @@ namespace JFramework.Net
                 buffers.WriteByte(ref position, (byte)OpCodes.Disconnect);
                 buffers.WriteInt(ref position, relayId);
                 transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
+                return;
             }
 
             if (connnections.TryGetSecond(clientId, out int connection))
@@ -725,17 +726,16 @@ namespace JFramework.Net
 
         public enum OpCodes
         {
-            JoinRoom = 1,
-            CreateRoom = 2,
-            UpdateRoom = 3,
-            LeaveRoom = 4,
-            UpdateData = 5,
-            Disconnect = 7,
-            OnClientAuthority = 9,
-            OnClientConnect = 10,
-            OnServerAuthority = 11,
-            NATRequest = 12,
-            NATAddress = 13,
+            Connected = 1,
+            Authority = 2,
+            JoinRoom = 3,
+            CreateRoom = 4,
+            UpdateRoom = 5,
+            LeaveRoom = 6,
+            UpdateData = 7,
+            Disconnect = 8,
+            NATRequest = 9,
+            NATAddress = 10,
         }
     }
 }

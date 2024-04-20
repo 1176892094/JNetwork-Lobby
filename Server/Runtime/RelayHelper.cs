@@ -24,7 +24,7 @@ namespace JFramework.Net
             connections.Add(clientId);
             var buffer = buffers.Rent(1);
             var position = 0;
-            buffer.WriteByte(ref position, (byte)OpCodes.OnClientConnect);
+            buffer.WriteByte(ref position, (byte)OpCodes.Connected);
             Program.transport.ServerSend(clientId, new ArraySegment<byte>(buffer, 0, position));
             buffers.Return(buffer);
         }
@@ -44,15 +44,15 @@ namespace JFramework.Net
 
                 if (connections.Contains(clientId))
                 {
-                    if (opcode == OpCodes.OnServerAuthority)
+                    if (opcode == OpCodes.Authority)
                     {
                         var response = data.ReadString(ref position);
-                        if (response == Program.setting.AuthenticationKey)
+                        if (response == Program.setting.ServerKey)
                         {
                             connections.Remove(clientId);
                             position = 0;
                             var buffer = buffers.Rent(1);
-                            buffer.WriteByte(ref position, (byte)OpCodes.OnClientAuthority);
+                            buffer.WriteByte(ref position, (byte)OpCodes.Authority);
                             Program.transport.ServerSend(clientId, new ArraySegment<byte>(buffer, 0, position));
                         }
                     }

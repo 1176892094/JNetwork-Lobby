@@ -33,7 +33,7 @@ namespace JFramework.Net
         [RestRoute("Get", "/api/servers")]
         public async Task ServerList(IHttpContext context)
         {
-            if (Program.setting.EndpointServerList)
+            if (Program.setting.EndPointServerList)
             {
                 string json = JsonConvert.SerializeObject(rooms, Formatting.Indented);
                 await context.Response.SendResponseAsync(json);
@@ -47,7 +47,7 @@ namespace JFramework.Net
         [RestRoute("Get", "/api/compressed/servers")]
         public async Task ServerListCompressed(IHttpContext context)
         {
-            if (Program.setting.EndpointServerList)
+            if (Program.setting.EndPointServerList)
             {
                 string json = JsonConvert.SerializeObject(rooms);
                 await context.Response.SendResponseAsync(json.Compress());

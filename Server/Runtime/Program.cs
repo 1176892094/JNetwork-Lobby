@@ -61,10 +61,10 @@ namespace JFramework.Net
                     var assembly = Assembly.LoadFile(Path.GetFullPath(setting.Assembly));
                     WriteLogMessage("OK", ConsoleColor.Green);
                     WriteLogMessage("加载传输类...", ConsoleColor.White, true);
-                    transport = assembly.CreateInstance(setting.TransportClass) as Transport;
+                    transport = assembly.CreateInstance(setting.Transport) as Transport;
                     if (transport != null)
                     {
-                        var type = assembly.GetType(setting.TransportClass);
+                        var type = assembly.GetType(setting.Transport);
                         WriteLogMessage("OK", ConsoleColor.Green);
                         WriteLogMessage("加载传输方法...", ConsoleColor.White, true);
                         if (type != null)
@@ -84,7 +84,7 @@ namespace JFramework.Net
                             WriteLogMessage($"客户端 {clientId} 连接到传输。", ConsoleColor.Cyan);
                             clients.Add(clientId);
                             relay.ServerConnected(clientId);
-                            if (setting.EnableNATPunchServer)
+                            if (setting.UseNATPuncher)
                             {
                                 var punchId = Guid.NewGuid().ToString();
                                 punches.Add(clientId, punchId);
@@ -115,7 +115,7 @@ namespace JFramework.Net
                             }
                         };
 
-                        transport.port = setting.EndpointPort;
+                        transport.port = setting.EndPointPort;
                         transport.StartServer();
 
                         WriteLogMessage("OK", ConsoleColor.Green);
@@ -123,7 +123,7 @@ namespace JFramework.Net
                         {
                             WriteLogMessage("开启端口服务...", ConsoleColor.White, true);
                             var endpoint = new RelayProxyServer();
-                            if (endpoint.Start(setting.EndpointPort))
+                            if (endpoint.Start(setting.EndPointPort))
                             {
                                 WriteLogMessage("OK", ConsoleColor.Green);
                             }
@@ -133,7 +133,7 @@ namespace JFramework.Net
                             }
                         }
 
-                        if (setting.EnableNATPunchServer)
+                        if (setting.UseNATPuncher)
                         {
                             WriteLogMessage("开启内网穿透...", ConsoleColor.White, true);
                             try
@@ -177,7 +177,7 @@ namespace JFramework.Net
             {
                 updateMethod?.Invoke(transport, null);
                 heartBeat++;
-                if (heartBeat >= setting.UpdateHeartbeatInterval)
+                if (heartBeat >= setting.HeartBeat)
                 {
                     heartBeat = 0;
                     foreach (var client in clients)
@@ -188,7 +188,7 @@ namespace JFramework.Net
                     GC.Collect();
                 }
 
-                await Task.Delay(setting.UpdateLoopTime);
+                await Task.Delay(setting.UpdateTime);
             }
         }
 

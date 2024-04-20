@@ -30,17 +30,16 @@ namespace JFramework.Net
 
     public enum OpCodes
     {
-        JoinRoom = 1,
-        CreateRoom = 2,
-        UpdateRoom = 3,
-        LeaveRoom = 4,
-        UpdateData = 5,
-        Disconnect = 7,
-        OnClientAuthority = 9,
-        OnClientConnect = 10,
-        OnServerAuthority = 11,
-        NATRequest = 12,
-        NATAddress = 13,
+        Connected = 1,
+        Authority = 2,
+        JoinRoom = 3,
+        CreateRoom = 4,
+        UpdateRoom = 5,
+        LeaveRoom = 6,
+        UpdateData = 7,
+        Disconnect = 8,
+        NATRequest = 9,
+        NATAddress = 10,
     }
 
     [Serializable]
