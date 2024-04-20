@@ -31,14 +31,14 @@ namespace JFramework.Net
         public event Action OnRoomUpdate;
         public event Action OnDisconnect;
 
-        private bool isNAT;
+        private int memberId;
         private bool isInit;
+        private bool isPunch;
         private bool isRelay;
         private bool isClient;
         private bool isServer;
         private bool isActive;
         private string hostId;
-        private int memberId;
         private byte[] buffers;
         private UdpClient clientPunch;
         private IPEndPoint punchEndPoint;
@@ -51,7 +51,7 @@ namespace JFramework.Net
         private HashMap<int, int> connnections = new HashMap<int, int>();
         private readonly HashMap<IPEndPoint, SocketProxy> proxies = new HashMap<IPEndPoint, SocketProxy>();
 
-        public bool isPunch => puncher != null && puncher.transport != null;
+        public bool isNAT => puncher != null && puncher.transport != null;
 
         private void Awake()
         {
@@ -60,7 +60,7 @@ namespace JFramework.Net
                 Debug.Log("请使用 NetworkTransport 进行传输");
             }
 
-            if (isPunch && !puncher.isPunch)
+            if (isNAT && !puncher.isPunch)
             {
                 Debug.Log("请使用 NetworkTransport 进行NAT传输");
             }
@@ -129,7 +129,7 @@ namespace JFramework.Net
                     position = 0;
                     buffers.WriteByte(ref position, (byte)OpCodes.OnServerAuthority);
                     buffers.WriteString(ref position, authority);
-                    transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
+                    transport.ClientSend(new ArraySegment<byte>(buffers, 0, position), channel);
                 }
                 else if (opcode == OpCodes.OnClientAuthority)
                 {
@@ -198,20 +198,20 @@ namespace JFramework.Net
 
                     clientEndPoint = new IPEndPoint(IPAddress.Parse(directIp), directPort);
 
-                    if (isPunch && attemptNatPunch)
+                    if (isNAT && attemptNatPunch)
                     {
                         StartCoroutine(NATPunch(clientEndPoint));
                     }
 
                     if (!isServer)
                     {
-                        if (socketProxy == null && isPunch && attemptNatPunch)
+                        if (socketProxy == null && isNAT && attemptNatPunch)
                         {
                             socketProxy = new SocketProxy(punchEndPoint.Port - 1);
                             socketProxy.OnReceive += ClientProcessProxyData;
                         }
 
-                        if (isPunch && attemptNatPunch)
+                        if (isNAT && attemptNatPunch)
                         {
                             puncher.JoinServer("127.0.0.1", punchEndPoint.Port - 1);
                         }
@@ -223,7 +223,7 @@ namespace JFramework.Net
                 }
                 else if (opcode == OpCodes.NATRequest)
                 {
-                    if (isPunch && GetAddress() != null)
+                    if (isNAT && GetAddress() != null)
                     {
                         var buffer = new byte[150];
                         int sendPos = 0;
@@ -425,10 +425,10 @@ namespace JFramework.Net
 
             hostId = address;
             int position = 0;
-            isNAT = false;
+            isPunch = false;
             buffers.WriteByte(ref position, (byte)OpCodes.JoinRoom);
             buffers.WriteString(ref position, hostId);
-            buffers.WriteBool(ref position, isPunch);
+            buffers.WriteBool(ref position, isNAT);
 
             if (GetAddress() == null)
             {
@@ -445,7 +445,7 @@ namespace JFramework.Net
 
         public override void ClientSend(ArraySegment<byte> segment, Channel channel = Channel.Reliable)
         {
-            if (isNAT)
+            if (isPunch)
             {
                 puncher.ClientSend(segment, channel);
             }
@@ -455,7 +455,7 @@ namespace JFramework.Net
                 buffers.WriteByte(ref position, (byte)OpCodes.UpdateData);
                 buffers.WriteBytes(ref position, segment.Array.Take(segment.Count).ToArray());
                 buffers.WriteInt(ref position, -1);
-                transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
+                transport.ClientSend(new ArraySegment<byte>(buffers, 0, position), channel);
             }
         }
 
@@ -466,7 +466,7 @@ namespace JFramework.Net
             buffers.WriteByte(ref position, (byte)OpCodes.LeaveRoom);
             transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
 
-            if (isPunch)
+            if (isNAT)
             {
                 puncher.ClientDisconnect();
             }
@@ -505,8 +505,8 @@ namespace JFramework.Net
             buffers.WriteString(ref position, serverName);
             buffers.WriteBool(ref position, isPublic);
             buffers.WriteString(ref position, serverData);
-            buffers.WriteBool(ref position, isPunch && clientIp != null);
-            if (isPunch)
+            buffers.WriteBool(ref position, isNAT && clientIp != null);
+            if (isNAT)
             {
                 if (clientIp != null)
                 {
@@ -554,6 +554,7 @@ namespace JFramework.Net
                 var position = 0;
                 buffers.WriteByte(ref position, (byte)OpCodes.Disconnect);
                 buffers.WriteInt(ref position, relayId);
+                transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
             }
 
             if (connnections.TryGetSecond(clientId, out int connection))
@@ -674,7 +675,7 @@ namespace JFramework.Net
 
         public void NATClientConnected()
         {
-            isNAT = true;
+            isPunch = true;
             OnClientConnected?.Invoke();
         }
 
@@ -688,9 +689,9 @@ namespace JFramework.Net
 
         public void NATClientDisconnected()
         {
-            if (isNAT)
+            if (isPunch)
             {
-                isNAT = false;
+                isPunch = false;
                 isClient = false;
                 OnClientDisconnected?.Invoke();
             }
@@ -698,7 +699,7 @@ namespace JFramework.Net
             {
                 var position = 0;
                 isClient = true;
-                isNAT = false;
+                isPunch = false;
                 buffers.WriteByte(ref position, (byte)OpCodes.JoinRoom);
                 buffers.WriteString(ref position, hostId);
                 buffers.WriteBool(ref position, false);
