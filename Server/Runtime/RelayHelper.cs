@@ -154,7 +154,6 @@ namespace JFramework.Net
                         Console.WriteLine("SendToClient:" + room.proxy.Address + ":" + room.proxy.Port);
                     }
                     
-                    buffer.WriteString(ref position, room.proxy.Address.ToString());
                     buffer.WriteInt(ref position, room.isPunch ? room.proxy.Port : room.port);
                     buffer.WriteBool(ref position, room.isPunch);
                     Program.transport.ServerSend(clientId, new ArraySegment<byte>(buffer, 0, position));
