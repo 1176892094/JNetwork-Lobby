@@ -18,7 +18,7 @@ namespace JFramework.Net
         public bool isAwake = true;
         public float heratBeat = 3;
 
-        public ushort punchPort = 7776;
+        public bool isPunch;
 
         public string serverKey = "Secret Key";
         public string serverName = "Game Room";
@@ -32,16 +32,16 @@ namespace JFramework.Net
 
         private int memberId;
         private bool isInit;
-        private bool isPunch;
         private bool isRelay;
         private bool isClient;
         private bool isServer;
         private bool isActive;
-        private string hostId;
+        private bool punching;
+        private string roomId;
         private byte[] buffers;
         private UdpClient punchClient;
         private IPEndPoint punchEndPoint;
-        private IPEndPoint serverEndPoint;
+        private IPEndPoint remoteEndPoint;
         private IPEndPoint clientEndPoint;
         private SocketProxy socketProxy;
         private NetworkNATPuncher puncher;
@@ -51,8 +51,6 @@ namespace JFramework.Net
         private HashMap<int, int> connnections = new HashMap<int, int>();
         private readonly HashMap<IPEndPoint, SocketProxy> proxies = new HashMap<IPEndPoint, SocketProxy>();
 
-        public bool isNAT => puncher != null && puncher.transport != null;
-
         private void Awake()
         {
             if (transport is NetworkRelayTransport)
@@ -61,9 +59,10 @@ namespace JFramework.Net
             }
 
             puncher = GetComponentInChildren<NetworkNATPuncher>();
-            if (isNAT && !puncher.isPunch)
+            if (isPunch && puncher != null && !puncher.isPunch)
             {
                 Debug.Log("请使用 NetworkTransport 进行NAT传输");
+                isPunch = false;
             }
 
             if (!isInit)
@@ -123,7 +122,12 @@ namespace JFramework.Net
             {
                 var data = segment.Array;
                 var position = segment.Offset;
-                var opcode = (OpCodes)data.ReadByte(ref position);
+                var key = data.ReadByte(ref position);
+                var opcode = (OpCodes)key;
+                if (key < 200)
+                {
+                    Console.WriteLine(opcode);
+                }
 
                 if (opcode == OpCodes.Connected)
                 {
@@ -172,12 +176,11 @@ namespace JFramework.Net
                             clients.Remove(client);
                         }
                     }
-
-                   
                 }
                 else if (opcode == OpCodes.CreateRoom)
                 {
                     serverId = data.ReadString(ref position);
+                    RequestServerList();
                 }
                 else if (opcode == OpCodes.JoinRoom)
                 {
@@ -185,6 +188,7 @@ namespace JFramework.Net
                     if (isClient)
                     {
                         OnClientConnected?.Invoke();
+                        RequestServerList();
                     }
 
                     if (isServer)
@@ -196,45 +200,53 @@ namespace JFramework.Net
                 }
                 else if (opcode == OpCodes.NATAddress)
                 {
-                    var directIp = data.ReadString(ref position);
-                    int directPort = data.ReadInt(ref position);
-                    bool attemptNatPunch = data.ReadBool(ref position);
+                    var newIp = data.ReadString(ref position);
+                    var newPort = data.ReadInt(ref position);
+                    var punched = data.ReadBool(ref position);
+                    // if (newIp == "127.0.0.1")
+                    // {
+                    //     newIp = "191.168.0.5";
+                    // }
+                    clientEndPoint = new IPEndPoint(IPAddress.Parse(newIp), newPort);
 
-                    clientEndPoint = new IPEndPoint(IPAddress.Parse(directIp), directPort);
-
-                    if (isNAT && attemptNatPunch)
+                    Debug.LogWarning(newIp + ":" + newPort + " " + clientEndPoint);
+                    if (isPunch && punched)
                     {
                         StartCoroutine(NATPunch(clientEndPoint));
                     }
 
                     if (!isServer)
                     {
-                        if (socketProxy == null && isNAT && attemptNatPunch)
+                        if (socketProxy == null && isPunch && punched)
                         {
                             socketProxy = new SocketProxy(punchEndPoint.Port - 1);
                             socketProxy.OnReceive += ClientProcessProxyData;
                         }
 
-                        if (isNAT && attemptNatPunch)
+                        if (isPunch && punched)
                         {
-                            puncher.JoinServer("127.0.0.1", punchEndPoint.Port - 1);
+                            if (newIp == "127.0.0.1")
+                            {
+                                puncher.JoinServer("127.0.0.1", newPort + 1);
+                            }
+                            else
+                            {
+                                puncher.JoinServer("127.0.0.1", punchEndPoint.Port - 1);
+                            }
                         }
                         else
                         {
-                            puncher.JoinServer(directIp, directPort);
+                            puncher.JoinServer(newIp, newPort);
                         }
                     }
                 }
                 else if (opcode == OpCodes.NATRequest)
                 {
-                    if (isNAT && GetAddress() != null)
+                    var clientIp = GetAddress();
+                    if (isPunch && puncher != null && clientIp != null)
                     {
-                        var buffer = new byte[150];
-                        int sendPos = 0;
-
-                        buffer.WriteBool(ref sendPos, true);
-                        buffer.WriteString(ref sendPos, data.ReadString(ref position));
-                        punchPort = (ushort)data.ReadInt(ref position);
+                        var punchId = data.ReadString(ref position);
+                        var punchPort = (ushort)data.ReadInt(ref position);
                         if (punchClient == null)
                         {
                             punchClient = new UdpClient { ExclusiveAddressUse = false };
@@ -242,9 +254,10 @@ namespace JFramework.Net
                             {
                                 try
                                 {
-                                    punchEndPoint = new IPEndPoint(IPAddress.Parse(GetAddress()), Random.Range(16000, 17000));
+                                    punchEndPoint = new IPEndPoint(IPAddress.Parse(clientIp), 20974);
                                     punchClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
                                     punchClient.Client.Bind(punchEndPoint);
+                                    Debug.LogWarning(punchEndPoint);
                                     break;
                                 }
                                 catch
@@ -259,12 +272,15 @@ namespace JFramework.Net
                             ip = Dns.GetHostEntry(address).AddressList[0];
                         }
 
-                        serverEndPoint = new IPEndPoint(ip, punchPort);
+                        var buffer = new byte[150];
+                        position = 0;
+                        buffer.WriteBool(ref position, true);
+                        buffer.WriteString(ref position, punchId);
+                        remoteEndPoint = new IPEndPoint(ip, punchPort);
                         for (int attempts = 0; attempts < 3; attempts++)
                         {
-                            punchClient.Send(buffer, sendPos, serverEndPoint);
+                            punchClient.Send(buffer, position, remoteEndPoint);
                         }
-
 
                         punchClient.BeginReceive(ReceiveData, punchClient);
                     }
@@ -279,17 +295,16 @@ namespace JFramework.Net
         private void ReceiveData(IAsyncResult result)
         {
             var endPoint = new IPEndPoint(IPAddress.Any, 0);
-            var data = punchClient.EndReceive(result, ref endPoint);
-
-            if (!endPoint.Address.Equals(serverEndPoint.Address))
+            var segment = punchClient.EndReceive(result, ref endPoint);
+            if (!endPoint.Address.Equals(remoteEndPoint.Address))
             {
                 if (isServer)
                 {
-                    if (proxies.TryGetFirst(endPoint, out SocketProxy foundProxy))
+                    if (proxies.TryGetFirst(endPoint, out var proxy))
                     {
-                        if (data.Length > 2)
+                        if (segment.Length > 2)
                         {
-                            foundProxy.RelayData(data, data.Length);
+                            proxy.RelayData(segment, segment.Length);
                         }
                     }
                     else
@@ -308,7 +323,7 @@ namespace JFramework.Net
                     }
                     else
                     {
-                        socketProxy.ClientRelayData(data, data.Length);
+                        socketProxy.ClientRelayData(segment, segment.Length);
                     }
                 }
             }
@@ -316,13 +331,15 @@ namespace JFramework.Net
             punchClient.BeginReceive(ReceiveData, punchClient);
         }
 
-        private void ServerProcessProxyData(IPEndPoint remoteEndpoint, byte[] data)
+        private void ServerProcessProxyData(IPEndPoint endPoint, byte[] data)
         {
-            punchClient.Send(data, data.Length, remoteEndpoint);
+            Debug.LogWarning("Server:" + BitConverter.ToString(data, 0, data.Length));
+            punchClient.Send(data, data.Length, endPoint);
         }
 
-        private void ClientProcessProxyData(IPEndPoint _, byte[] data)
+        private void ClientProcessProxyData(IPEndPoint entPoint, byte[] data)
         {
+            Debug.LogWarning("Client:" +BitConverter.ToString(data, 0, data.Length));
             punchClient.Send(data, data.Length, clientEndPoint);
         }
 
@@ -333,7 +350,7 @@ namespace JFramework.Net
                 var position = 0;
                 buffers.WriteByte(ref position, byte.MaxValue);
                 transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
-                punchClient?.Send(new byte[] { 0 }, 1, serverEndPoint);
+                punchClient?.Send(new byte[] { 0 }, 1, remoteEndPoint);
                 var keys = new List<IPEndPoint>(proxies.Keys);
                 foreach (var key in keys.Where(ip => DateTime.Now.Subtract(proxies.GetFirst(ip).interactTime).TotalSeconds > 10))
                 {
@@ -355,11 +372,11 @@ namespace JFramework.Net
             }
         }
 
-        private IEnumerator NATPunch(IPEndPoint remoteAddress)
+        private IEnumerator NATPunch(IPEndPoint endPoint)
         {
             for (int i = 0; i < 10; i++)
             {
-                punchClient.Send(punchData, 1, remoteAddress);
+                punchClient.Send(punchData, 1, endPoint);
                 yield return new WaitForSeconds(0.25f);
             }
         }
@@ -427,14 +444,14 @@ namespace JFramework.Net
                 return;
             }
 
-            hostId = address;
+            roomId = address;
             int position = 0;
-            isPunch = false;
+            punching = false;
             buffers.WriteByte(ref position, (byte)OpCodes.JoinRoom);
-            buffers.WriteString(ref position, hostId);
-            buffers.WriteBool(ref position, isNAT);
+            buffers.WriteString(ref position, address);
+            buffers.WriteBool(ref position, puncher != null);
 
-            if (GetAddress() == null)
+            if (puncher == null)
             {
                 buffers.WriteString(ref position, "0.0.0.0");
             }
@@ -449,7 +466,7 @@ namespace JFramework.Net
 
         public override void ClientSend(ArraySegment<byte> segment, Channel channel = Channel.Reliable)
         {
-            if (isPunch)
+            if (punching)
             {
                 puncher.ClientSend(segment, channel);
             }
@@ -470,7 +487,7 @@ namespace JFramework.Net
             buffers.WriteByte(ref position, (byte)OpCodes.LeaveRoom);
             transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
 
-            if (isNAT)
+            if (puncher != null)
             {
                 puncher.ClientDisconnect();
             }
@@ -509,27 +526,26 @@ namespace JFramework.Net
             buffers.WriteString(ref position, serverName);
             buffers.WriteBool(ref position, isPublic);
             buffers.WriteString(ref position, serverData);
-            buffers.WriteBool(ref position, isNAT && clientIp != null);
-            if (isNAT)
+            buffers.WriteBool(ref position, puncher != null && clientIp != null);
+            if (puncher != null && clientIp != null && isPunch)
             {
-                if (clientIp != null)
-                {
-                    buffers.WriteString(ref position, clientIp);
-                    puncher.StartServer(punchEndPoint.Port + 1);
-                }
-                else
-                {
-                    buffers.WriteString(ref position, "0.0.0.0");
-                }
+                buffers.WriteString(ref position, clientIp);
+                puncher.StartServer(isPunch ? punchEndPoint.Port + 1 : -1);
+            }
+            else
+            {
+                buffers.WriteString(ref position, "0.0.0.0");
+            }
 
+            if (isPunch)
+            {
                 buffers.WriteBool(ref position, true);
                 buffers.WriteInt(ref position, 0);
             }
             else
             {
-                buffers.WriteString(ref position, "0.0.0.0");
                 buffers.WriteBool(ref position, false);
-                buffers.WriteInt(ref position, puncher.isPunch ? puncher.transport.port : 1);
+                buffers.WriteInt(ref position, puncher == null ? 1 : puncher.isPunch ? puncher.transport.port : 1);
             }
 
             transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
@@ -537,9 +553,9 @@ namespace JFramework.Net
 
         public override void ServerSend(int clientId, ArraySegment<byte> segment, Channel channel = Channel.Reliable)
         {
-            if (puncher != null && connnections.TryGetSecond(clientId, out int directId))
+            if (puncher != null && connnections.TryGetSecond(clientId, out int connection))
             {
-                puncher.ServerSend(directId, segment, channel);
+                puncher.ServerSend(connection, segment, channel);
             }
             else
             {
@@ -680,7 +696,7 @@ namespace JFramework.Net
 
         public void NATClientConnected()
         {
-            isPunch = true;
+            punching = true;
             OnClientConnected?.Invoke();
         }
 
@@ -694,9 +710,9 @@ namespace JFramework.Net
 
         public void NATClientDisconnected()
         {
-            if (isPunch)
+            if (punching)
             {
-                isPunch = false;
+                punching = false;
                 isClient = false;
                 OnClientDisconnected?.Invoke();
             }
@@ -704,9 +720,9 @@ namespace JFramework.Net
             {
                 var position = 0;
                 isClient = true;
-                isPunch = false;
+                punching = false;
                 buffers.WriteByte(ref position, (byte)OpCodes.JoinRoom);
-                buffers.WriteString(ref position, hostId);
+                buffers.WriteString(ref position, roomId);
                 buffers.WriteBool(ref position, false);
                 transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
             }
@@ -721,11 +737,11 @@ namespace JFramework.Net
         [Serializable]
         public struct Room
         {
+            public string serverId;
             public string serverName;
+            public string serverData;
             public int currentPlayers;
             public int maxPlayers;
-            public int serverId;
-            public string serverData;
         }
 
         public enum OpCodes

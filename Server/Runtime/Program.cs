@@ -192,26 +192,25 @@ namespace JFramework.Net
         {
             WriteLogMessage("OK", ConsoleColor.Green);
             var endPoint = new IPEndPoint(IPAddress.Any, setting.NATPunchPort);
-            var serverResponse = new byte[] { 1 };
 
             while (true)
             {
-                var readData = punchClient.Receive(ref endPoint);
+                var segment = punchClient.Receive(ref endPoint);
                 var position = 0;
                 try
                 {
-                    if (readData.ReadBool(ref position))
+                    if (segment.ReadBool(ref position))
                     {
-                        var clientId = readData.ReadString(ref position);
+                        var clientId = segment.ReadString(ref position);
                         if (punches.TryGetSecond(clientId, out position))
                         {
                             connections.Add(position, new IPEndPoint(endPoint.Address, endPoint.Port));
                             punches.Remove(position);
-                            WriteLogMessage("客户端成功建立内网穿透连接:" + endPoint);
+                            WriteLogMessage($"客户端 {position} 建立内网穿透连接 " + endPoint);
                         }
                     }
-
-                    punchClient.Send(serverResponse, 1, endPoint);
+                    
+                    punchClient.Send(new byte[] { 1 }, 1, endPoint);
                 }
                 catch
                 {

@@ -35,7 +35,13 @@ namespace JFramework.Net
             {
                 var data = segment.Array;
                 var position = segment.Offset;
-                var opcode = (OpCodes)data.ReadByte(ref position);
+                var key = data.ReadByte(ref position);
+                var opcode = (OpCodes)key;
+                if (key < 200)
+                {
+                    Console.WriteLine(opcode);
+                }
+
                 if (connections.Contains(clientId))
                 {
                     if (opcode == OpCodes.Authority)
@@ -57,7 +63,9 @@ namespace JFramework.Net
                 switch (opcode)
                 {
                     case OpCodes.CreateRoom:
-                        CreateRoom(clientId, data.ReadInt(ref position), data.ReadString(ref position), data.ReadBool(ref position), data.ReadString(ref position), data.ReadBool(ref position), data.ReadString(ref position), data.ReadBool(ref position), data.ReadInt(ref position));
+                        CreateRoom(clientId, data.ReadInt(ref position), data.ReadString(ref position), data.ReadBool(ref position),
+                            data.ReadString(ref position), data.ReadBool(ref position), data.ReadString(ref position),
+                            data.ReadBool(ref position), data.ReadInt(ref position));
                         break;
                     case OpCodes.LeaveRoom:
                         LeaveRoom(clientId);
@@ -134,27 +142,30 @@ namespace JFramework.Net
                 var buffer = buffers.Rent(500);
                 if (isPunch && Program.instance.connections.TryGetValue(clientId, out var connection))
                 {
+                    Console.WriteLine(clientId + " " + serverId + " "+ room.proxy.Address+" " + connection.Address + ":" + connection.Port + " " + room.address + ":" + room.proxy.Port + " " + address + ":" + room.port);
+
                     buffer.WriteByte(ref position, (byte)OpCodes.NATAddress);
-                    if (connection.Address.Equals(room.proxy.Address))
+                    if (connection.Address.Equals(room.proxy.Address)) // 60.163.54.168 == 60.163.54.168  给连接者发送房主的信息
                     {
-                        buffer.WriteString(ref position, room.address == address ? "127.0.0.1" : room.address);
+                        buffer.WriteString(ref position, room.address == address ? "127.0.0.1" : room.address); // 127.0.0.1 / 192.168.0.5
                     }
                     else
                     {
-                        buffer.WriteString(ref position, room.proxy.Address.ToString());
+                        buffer.WriteString(ref position, room.proxy.Address.ToString()); // 60.163.54.168
                     }
 
-                    buffer.WriteInt(ref position, room.isPunch ? room.proxy.Port : room.port);
+                    buffer.WriteInt(ref position, room.isPunch ? room.proxy.Port : room.port); // 17231
                     buffer.WriteBool(ref position, room.isPunch);
-                    Program.transport.ServerSend(clientId, new ArraySegment<byte>(buffer, 0, position));
+                    Program.transport.ServerSend(clientId, new ArraySegment<byte>(buffer, 0, position));// 127.0.0.1:17231
+
                     if (room.isPunch)
                     {
                         position = 0;
                         buffer.WriteByte(ref position, (byte)OpCodes.NATAddress);
-                        buffer.WriteString(ref position, connection.Address.ToString());
-                        buffer.WriteInt(ref position, connection.Port);
+                        buffer.WriteString(ref position, connection.Address.ToString()); // 60.163.54.168 给房主发送连接者信息
+                        buffer.WriteInt(ref position, connection.Port); // 17235
                         buffer.WriteBool(ref position, true);
-                        Program.transport.ServerSend(room.clientId, new ArraySegment<byte>(buffer, 0, position));
+                        Program.transport.ServerSend(room.clientId, new ArraySegment<byte>(buffer, 0, position)); // 60.163.54.168:17235
                     }
 
                     buffers.Return(buffer);
@@ -197,6 +208,8 @@ namespace JFramework.Net
                 isPunch = isPunch
             };
 
+            Console.WriteLine(clientId + " " + maxPlayers + " " + serverName + " " + isPublic + " " + serverData + " " + room.serverId +
+                              " " + proxy + " " + clientIp + " " + isDirect + " " + clientPort + " " + isPunch);
             rooms.Add(room.serverId, room);
             clients.Add(clientId, room);
             var position = 0;
