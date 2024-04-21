@@ -142,30 +142,32 @@ namespace JFramework.Net
                 var buffer = buffers.Rent(500);
                 if (isPunch && Program.instance.connections.TryGetValue(clientId, out var connection))
                 {
-                    Console.WriteLine(clientId + " " + serverId + " "+ room.proxy.Address+" " + connection.Address + ":" + connection.Port + " " + room.address + ":" + room.proxy.Port + " " + address + ":" + room.port);
-
                     buffer.WriteByte(ref position, (byte)OpCodes.NATAddress);
-                    if (connection.Address.Equals(room.proxy.Address)) // 60.163.54.168 == 60.163.54.168  给连接者发送房主的信息
+                    if (connection.Address.Equals(room.proxy.Address))
                     {
-                        buffer.WriteString(ref position, room.address == address ? "127.0.0.1" : room.address); // 127.0.0.1 / 192.168.0.5
+                        buffer.WriteString(ref position, room.address == address ? "127.0.0.1" : room.address);
+                        Console.WriteLine("SendToClient:" + room.address + " " + address + " " + room.address == address ? "127.0.0.1" + ":" + room.proxy.Port : room.address + ":" + room.proxy.Port);
                     }
                     else
                     {
-                        buffer.WriteString(ref position, room.proxy.Address.ToString()); // 60.163.54.168
+                        buffer.WriteString(ref position, room.proxy.Address.ToString());
+                        Console.WriteLine("SendToClient:" + room.proxy.Address + ":" + room.proxy.Port);
                     }
-
-                    buffer.WriteInt(ref position, room.isPunch ? room.proxy.Port : room.port); // 17231
+                    
+                    buffer.WriteString(ref position, room.proxy.Address.ToString());
+                    buffer.WriteInt(ref position, room.isPunch ? room.proxy.Port : room.port);
                     buffer.WriteBool(ref position, room.isPunch);
-                    Program.transport.ServerSend(clientId, new ArraySegment<byte>(buffer, 0, position));// 127.0.0.1:17231
+                    Program.transport.ServerSend(clientId, new ArraySegment<byte>(buffer, 0, position));
 
                     if (room.isPunch)
                     {
                         position = 0;
                         buffer.WriteByte(ref position, (byte)OpCodes.NATAddress);
-                        buffer.WriteString(ref position, connection.Address.ToString()); // 60.163.54.168 给房主发送连接者信息
-                        buffer.WriteInt(ref position, connection.Port); // 17235
+                        buffer.WriteString(ref position, connection.Address.ToString());
+                        buffer.WriteInt(ref position, connection.Port);
                         buffer.WriteBool(ref position, true);
-                        Program.transport.ServerSend(room.clientId, new ArraySegment<byte>(buffer, 0, position)); // 60.163.54.168:17235
+                        Program.transport.ServerSend(room.clientId, new ArraySegment<byte>(buffer, 0, position));
+                        Console.WriteLine("SendToHost:" + connection.Address + ":" + connection.Port);
                     }
 
                     buffers.Return(buffer);
@@ -188,7 +190,8 @@ namespace JFramework.Net
             }
         }
 
-        private void CreateRoom(int clientId, int maxPlayers, string serverName, bool isPublic, string serverData, bool isDirect, string clientIp, bool isPunch, int clientPort)
+        private void CreateRoom(int clientId, int maxPlayers, string serverName, bool isPublic, string serverData, bool isDirect,
+            string clientIp, bool isPunch, int clientPort)
         {
             LeaveRoom(clientId);
             Program.instance.connections.TryGetValue(clientId, out var proxy);
@@ -208,8 +211,7 @@ namespace JFramework.Net
                 isPunch = isPunch
             };
 
-            Console.WriteLine(clientId + " " + maxPlayers + " " + serverName + " " + isPublic + " " + serverData + " " + room.serverId +
-                              " " + proxy + " " + clientIp + " " + isDirect + " " + clientPort + " " + isPunch);
+            Console.WriteLine($"客户端{clientId}创建房间。" + room.serverId + " " + proxy + " " + clientIp);
             rooms.Add(room.serverId, room);
             clients.Add(clientId, room);
             var position = 0;

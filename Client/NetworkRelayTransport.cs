@@ -209,7 +209,7 @@ namespace JFramework.Net
                     // }
                     clientEndPoint = new IPEndPoint(IPAddress.Parse(newIp), newPort);
 
-                    Debug.LogWarning(newIp + ":" + newPort + " " + clientEndPoint);
+                    Debug.LogWarning(clientEndPoint);
                     if (isPunch && punched)
                     {
                         StartCoroutine(NATPunch(clientEndPoint));
@@ -223,21 +223,22 @@ namespace JFramework.Net
                             socketProxy.OnReceive += ClientProcessProxyData;
                         }
 
-                        if (isPunch && punched)
-                        {
-                            if (newIp == "127.0.0.1")
-                            {
-                                puncher.JoinServer("127.0.0.1", newPort + 1);
-                            }
-                            else
-                            {
-                                puncher.JoinServer("127.0.0.1", punchEndPoint.Port - 1);
-                            }
-                        }
-                        else
-                        {
-                            puncher.JoinServer(newIp, newPort);
-                        }
+                        puncher.JoinServer(newIp, newPort);
+                        // if (isPunch && punched)
+                        // {
+                        //     if (newIp == "127.0.0.1")
+                        //     {
+                        //         puncher.JoinServer("127.0.0.1", newPort + 1);
+                        //     }
+                        //     else
+                        //     {
+                        //         puncher.JoinServer("127.0.0.1", punchEndPoint.Port - 1);
+                        //     }
+                        // }
+                        // else
+                        // {
+                        //     puncher.JoinServer(newIp, newPort);
+                        // }
                     }
                 }
                 else if (opcode == OpCodes.NATRequest)
@@ -254,7 +255,7 @@ namespace JFramework.Net
                             {
                                 try
                                 {
-                                    punchEndPoint = new IPEndPoint(IPAddress.Parse(clientIp), 20974);
+                                    punchEndPoint = new IPEndPoint(IPAddress.Parse(clientIp), Random.Range(16000, 17000));
                                     punchClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
                                     punchClient.Client.Bind(punchEndPoint);
                                     Debug.LogWarning(punchEndPoint);
@@ -333,13 +334,13 @@ namespace JFramework.Net
 
         private void ServerProcessProxyData(IPEndPoint endPoint, byte[] data)
         {
-            Debug.LogWarning("Server:" + BitConverter.ToString(data, 0, data.Length));
+            Debug.LogWarning("Server:" + endPoint);
             punchClient.Send(data, data.Length, endPoint);
         }
 
         private void ClientProcessProxyData(IPEndPoint entPoint, byte[] data)
         {
-            Debug.LogWarning("Client:" +BitConverter.ToString(data, 0, data.Length));
+            Debug.LogWarning("Client:" + entPoint);
             punchClient.Send(data, data.Length, clientEndPoint);
         }
 

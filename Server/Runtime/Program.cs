@@ -209,11 +209,12 @@ namespace JFramework.Net
                             WriteLogMessage($"客户端 {position} 建立内网穿透连接 " + endPoint);
                         }
                     }
-                    
+
                     punchClient.Send(new byte[] { 1 }, 1, endPoint);
                 }
-                catch
+                catch (Exception e)
                 {
+                    Console.WriteLine(e);
                     // ignored
                 }
             }
