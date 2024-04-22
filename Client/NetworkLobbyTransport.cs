@@ -16,9 +16,7 @@ namespace JFramework.Net
         public Transport transport;
         public bool isAwake = true;
         public float heratBeat = 3;
-
         public bool isPunch;
-
         public string serverId;
         public string serverKey = "Secret Key";
         public string roomName = "Game Room";
@@ -43,7 +41,7 @@ namespace JFramework.Net
         private IPEndPoint remoteEndPoint;
         private IPEndPoint clientEndPoint;
         private SocketProxy socketProxy;
-        private NetworkNATPuncher puncher;
+        private NetworkProxyTransport puncher;
 
         private HashMap<int, int> clients = new HashMap<int, int>();
         private HashMap<int, int> connnections = new HashMap<int, int>();
@@ -56,8 +54,8 @@ namespace JFramework.Net
                 Debug.Log("请使用 NetworkTransport 进行传输");
             }
 
-            puncher = GetComponentInChildren<NetworkNATPuncher>();
-            if (isPunch && puncher != null && !puncher.isPunch)
+            puncher = GetComponentInChildren<NetworkProxyTransport>();
+            if (isPunch && puncher != null)
             {
                 Debug.Log("请使用 NetworkTransport 进行NAT传输");
                 isPunch = false;
@@ -122,7 +120,7 @@ namespace JFramework.Net
             }
             else
             {
-                Debug.Log("已连接到中继服务器!");
+                Debug.Log("已连接到大厅服务器!");
             }
         }
 
@@ -147,12 +145,12 @@ namespace JFramework.Net
             else if (opcode == OpCodes.Authority)
             {
                 isActive = true;
-                RequestServerList();
+                UpdateRoom();
             }
             else if (opcode == OpCodes.CreateRoom)
             {
                 serverId = data.ReadString(ref position);
-                RequestServerList();
+                UpdateRoom();
             }
             else if (opcode == OpCodes.JoinRoom)
             {
@@ -200,6 +198,7 @@ namespace JFramework.Net
                     int client = data.ReadInt(ref position);
                     if (clients.TryGetFirst(client, out int clientId))
                     {
+                        Debug.Log(clientId);
                         OnServerDisconnected?.Invoke(clients.GetFirst(clientId));
                         clients.Remove(client);
                     }
@@ -347,9 +346,7 @@ namespace JFramework.Net
         {
             if (isLobby)
             {
-                var position = 0;
-                buffers.WriteByte(ref position, byte.MaxValue);
-                transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
+                transport.ClientSend(new byte[] { 255 });
                 punchClient?.Send(new byte[] { 0 }, 1, remoteEndPoint);
                 var keys = new List<IPEndPoint>(proxies.Keys);
                 foreach (var key in keys.Where(ip => DateTime.Now.Subtract(proxies.GetFirst(ip).interactTime).TotalSeconds > 10))
@@ -360,15 +357,30 @@ namespace JFramework.Net
             }
         }
 
-        public void RequestServerList()
+        public async void UpdateRoom()
         {
             if (isActive && isLobby)
             {
-                GetServerList();
+                var uri = $"http://{address}:{port}/api/compressed/servers";
+                using var request = UnityWebRequest.Get(uri);
+                await request.SendWebRequest();
+                var result = request.downloadHandler.text;
+                if (request.result != UnityWebRequest.Result.Success)
+                {
+                    Debug.LogWarning("无法获取服务器列表。"+$"{address}:{port}");
+                    return;
+                }
+
+                rooms?.Clear();
+                var json = result.Decompress();
+                json = "{" + "\"value\":" + json + "}";
+                Debug.Log("房间信息：" + json);
+                rooms = JsonUtility.FromJson<Variables<Room>>(json).value;
+                OnRoomUpdate?.Invoke();
             }
             else
             {
-                Debug.Log("您必须连接到中继以请求服务器列表!");
+                Debug.Log("您必须连接到大厅以请求房间列表!");
             }
         }
 
@@ -379,26 +391,6 @@ namespace JFramework.Net
                 punchClient.Send(new byte[] { 1 }, 1, endPoint);
                 yield return new WaitForSeconds(0.25f);
             }
-        }
-
-        private async void GetServerList()
-        {
-            var uri = $"http://{address}:{port}/api/compressed/servers";
-            using var request = UnityWebRequest.Get(uri);
-            await request.SendWebRequest();
-            var result = request.downloadHandler.text;
-            if (request.result != UnityWebRequest.Result.Success)
-            {
-                Debug.LogWarning("无法获取服务器列表。"+$"{address}:{port}");
-                return;
-            }
-
-            rooms?.Clear();
-            var json = result.Decompress();
-            json = "{" + "\"value\":" + json + "}";
-            Debug.Log("房间信息：" + json);
-            rooms = JsonUtility.FromJson<Variables<Room>>(json).value;
-            OnRoomUpdate?.Invoke();
         }
 
         public void UpdateRoom(string serverName, string serverData, bool isPublic, int maxPlayers)
@@ -433,7 +425,7 @@ namespace JFramework.Net
 
             if (!isLobby)
             {
-                Debug.Log("没有连接到中继!");
+                Debug.Log("没有连接到大厅!");
                 OnClientDisconnected?.Invoke();
                 return;
             }
@@ -496,7 +488,7 @@ namespace JFramework.Net
         {
             if (!isLobby)
             {
-                Debug.Log("没有连接到中继!");
+                Debug.Log("没有连接到大厅!");
                 return;
             }
 
@@ -541,7 +533,7 @@ namespace JFramework.Net
             }
             else
             {
-                buffers.WriteInt(ref position, puncher == null ? 1 : puncher.isPunch ? puncher.transport.port : 1);
+                buffers.WriteInt(ref position, puncher == null ? 1 : puncher.transport.port);
             }
 
             buffers.WriteBool(ref position, isPunch);
@@ -705,20 +697,19 @@ namespace JFramework.Net
                 OnClientReceive?.Invoke(segment, channel);
             }
         }
-
+        
         public void NATClientDisconnected()
         {
             if (punching)
             {
-                punching = false;
                 isClient = false;
+                punching = false;
                 OnClientDisconnected?.Invoke();
             }
             else
             {
-                var position = 0;
                 isClient = true;
-                punching = false;
+                var position = 0;
                 buffers.WriteByte(ref position, (byte)OpCodes.JoinRoom);
                 buffers.WriteString(ref position, address);
                 buffers.WriteBool(ref position, false);
