@@ -39,7 +39,7 @@ namespace JFramework.Net
         LeaveRoom = 6,
         UpdateData = 7,
         Disconnect = 8,
-        NATRequest = 9,
+        NATPuncher = 9,
         NATAddress = 10,
     }
 }

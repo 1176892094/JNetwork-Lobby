@@ -206,45 +206,7 @@ namespace JFramework.Net
                     }
                 }
             }
-            else if (opcode == OpCodes.NATAddress)
-            {
-                var newIp = data.ReadString(ref position);
-                var newPort = data.ReadInt(ref position);
-                var punched = data.ReadBool(ref position);
-                clientEndPoint = new IPEndPoint(IPAddress.Parse(newIp), newPort);
-
-                Debug.LogWarning(clientEndPoint);
-                if (isPunch && punched)
-                {
-                    StartCoroutine(NATPunch(clientEndPoint));
-                }
-
-                if (!isServer)
-                {
-                    if (socketProxy == null && isPunch && punched)
-                    {
-                        socketProxy = new SocketProxy(punchEndPoint.Port - 1);
-                        socketProxy.OnReceive += ClientProcessProxyData;
-                    }
-
-                    if (isPunch && punched)
-                    {
-                        if (newIp == "127.0.0.1")
-                        {
-                            puncher.JoinServer("127.0.0.1", newPort + 1);
-                        }
-                        else
-                        {
-                            puncher.JoinServer("127.0.0.1", punchEndPoint.Port - 1);
-                        }
-                    }
-                    else
-                    {
-                        puncher.JoinServer(newIp, newPort);
-                    }
-                }
-            }
-            else if (opcode == OpCodes.NATRequest)
+            else if (opcode == OpCodes.NATPuncher)
             {
                 var clientIp = GetAddress();
                 if (isPunch && puncher != null && clientIp != null)
@@ -287,6 +249,44 @@ namespace JFramework.Net
                     }
 
                     punchClient.BeginReceive(ReceiveData, punchClient);
+                }
+            }
+            else if (opcode == OpCodes.NATAddress)
+            {
+                var newIp = data.ReadString(ref position);
+                var newPort = data.ReadInt(ref position);
+                var punched = data.ReadBool(ref position);
+                clientEndPoint = new IPEndPoint(IPAddress.Parse(newIp), newPort);
+
+                Debug.LogWarning(clientEndPoint);
+                if (isPunch && punched)
+                {
+                    StartCoroutine(NATPunch(clientEndPoint));
+                }
+
+                if (!isServer)
+                {
+                    if (socketProxy == null && isPunch && punched)
+                    {
+                        socketProxy = new SocketProxy(punchEndPoint.Port - 1);
+                        socketProxy.OnReceive += ClientProcessProxyData;
+                    }
+
+                    if (isPunch && punched)
+                    {
+                        if (newIp == "127.0.0.1")
+                        {
+                            puncher.JoinServer("127.0.0.1", newPort + 1);
+                        }
+                        else
+                        {
+                            puncher.JoinServer("127.0.0.1", punchEndPoint.Port - 1);
+                        }
+                    }
+                    else
+                    {
+                        puncher.JoinServer(newIp, newPort);
+                    }
                 }
             }
         }
@@ -755,7 +755,7 @@ namespace JFramework.Net
             LeaveRoom = 6,
             UpdateData = 7,
             Disconnect = 8,
-            NATRequest = 9,
+            NATPuncher = 9,
             NATAddress = 10,
         }
     }
