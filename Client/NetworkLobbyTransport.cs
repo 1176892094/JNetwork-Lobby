@@ -26,12 +26,9 @@ namespace JFramework.Net
         public bool isPublic = true;
         public List<Room> rooms = new List<Room>();
 
-        private int index;
-        private bool isInit;
-        private bool isLobby;
+        private int number;
         private bool isClient;
         private bool isServer;
-        private bool isActive;
         private bool punching;
         private byte[] buffers;
         private UdpClient punchClient;
@@ -39,6 +36,7 @@ namespace JFramework.Net
         private IPEndPoint remoteEndPoint;
         private IPEndPoint clientEndPoint;
         private SocketProxy socketProxy;
+        private ConnectState clientState;
         private NetworkProxyTransport clientProxy;
         private HashMap<int, int> clients = new HashMap<int, int>();
         private HashMap<int, int> connnections = new HashMap<int, int>();
@@ -62,16 +60,12 @@ namespace JFramework.Net
                 Debug.Log("请使用 NetworkTransport 进行NAT传输");
             }
 
-            if (!isInit)
-            {
-                isInit = true;
-                transport.OnClientConnected -= OnClientConnected;
-                transport.OnClientDisconnected -= OnClientDisconnected;
-                transport.OnClientReceive -= OnClientReceive;
-                transport.OnClientConnected += OnClientConnected;
-                transport.OnClientDisconnected += OnClientDisconnected;
-                transport.OnClientReceive += OnClientReceive;
-            }
+            transport.OnClientConnected -= OnClientConnected;
+            transport.OnClientDisconnected -= OnClientDisconnected;
+            transport.OnClientReceive -= OnClientReceive;
+            transport.OnClientConnected += OnClientConnected;
+            transport.OnClientDisconnected += OnClientDisconnected;
+            transport.OnClientReceive += OnClientReceive;
 
             if (isAwake)
             {
@@ -82,13 +76,12 @@ namespace JFramework.Net
 
             void OnClientConnected()
             {
-                isLobby = true;
+                clientState = ConnectState.Connected;
             }
 
             void OnClientDisconnected()
             {
-                isLobby = false;
-                isActive = false;
+                clientState = ConnectState.Disconnected;
                 OnDisconnect?.Invoke();
             }
 
@@ -107,7 +100,7 @@ namespace JFramework.Net
 
         private void OnDestroy()
         {
-            if (isActive)
+            if (clientState != ConnectState.Disconnected)
             {
                 transport.ClientDisconnect();
             }
@@ -115,17 +108,16 @@ namespace JFramework.Net
 
         public void ConnectToLobby()
         {
-            if (!isLobby)
-            {
-                transport.port = port;
-                transport.address = address;
-                buffers = new byte[transport.GetMaxPacketSize()];
-                transport.ClientConnect();
-            }
-            else
+            if (clientState != ConnectState.Disconnected)
             {
                 Debug.Log("已连接到大厅服务器!");
+                return;
             }
+
+            transport.port = port;
+            transport.address = address;
+            buffers = new byte[transport.GetMaxPacketSize()];
+            transport.ClientConnect();
         }
 
         private void ClientReceive(ArraySegment<byte> segment, Channel channel)
@@ -148,7 +140,7 @@ namespace JFramework.Net
             }
             else if (opcode == OpCodes.Authority)
             {
-                isActive = true;
+                clientState = ConnectState.Authority;
                 UpdateRoom();
             }
             else if (opcode == OpCodes.CreateRoom)
@@ -166,9 +158,9 @@ namespace JFramework.Net
 
                 if (isServer)
                 {
-                    clients.Add(clientId, index);
-                    OnServerConnected?.Invoke(index);
-                    index++;
+                    clients.Add(clientId, number);
+                    OnServerConnected?.Invoke(number);
+                    number++;
                 }
             }
             else if (opcode == OpCodes.LeaveRoom)
@@ -347,7 +339,7 @@ namespace JFramework.Net
 
         private void HeartBeat()
         {
-            if (isLobby)
+            if (clientState != ConnectState.Disconnected)
             {
                 transport.ClientSend(new byte[] { 255 });
                 punchClient?.Send(new byte[] { 0 }, 1, remoteEndPoint);
@@ -362,7 +354,7 @@ namespace JFramework.Net
 
         public async void UpdateRoom()
         {
-            if (isLobby && isActive)
+            if (clientState == ConnectState.Authority)
             {
                 var uri = $"http://{address}:{port}/api/compressed/servers";
                 using var request = UnityWebRequest.Get(uri);
@@ -426,7 +418,7 @@ namespace JFramework.Net
                 address = uri.Host;
             }
 
-            if (!isLobby)
+            if (clientState == ConnectState.Disconnected)
             {
                 Debug.Log("没有连接到大厅!");
                 OnClientDisconnected?.Invoke();
@@ -489,7 +481,7 @@ namespace JFramework.Net
 
         public override void StartServer()
         {
-            if (!isLobby)
+            if (clientState == ConnectState.Disconnected)
             {
                 Debug.Log("没有连接到大厅!");
                 return;
@@ -501,7 +493,7 @@ namespace JFramework.Net
                 return;
             }
 
-            index = 1;
+            number = 1;
             isServer = true;
             clients = new HashMap<int, int>();
             connnections = new HashMap<int, int>();
@@ -664,9 +656,9 @@ namespace JFramework.Net
         {
             if (isServer)
             {
-                connnections.Add(clientId, index);
-                OnServerConnected?.Invoke(index);
-                index++;
+                connnections.Add(clientId, number);
+                OnServerConnected?.Invoke(number);
+                number++;
             }
         }
 
@@ -734,13 +726,6 @@ namespace JFramework.Net
             public string data;
             public int count;
             public int current;
-        }
-
-        public enum State
-        {
-            Connected,
-            Authority,
-            Disconnected,
         }
 
         public enum OpCodes
