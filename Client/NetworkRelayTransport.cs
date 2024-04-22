@@ -45,8 +45,7 @@ namespace JFramework.Net
         private IPEndPoint clientEndPoint;
         private SocketProxy socketProxy;
         private NetworkNATPuncher puncher;
-
-        private readonly byte[] punchData = { 1 };
+        
         private HashMap<int, int> clients = new HashMap<int, int>();
         private HashMap<int, int> connnections = new HashMap<int, int>();
         private readonly HashMap<IPEndPoint, SocketProxy> proxies = new HashMap<IPEndPoint, SocketProxy>();
@@ -68,9 +67,9 @@ namespace JFramework.Net
             if (!isInit)
             {
                 isInit = true;
-                transport.OnClientConnected = ClientConnected;
-                transport.OnClientDisconnected = ClientDisconnected;
-                transport.OnClientReceive = ClientReceive;
+                transport.OnClientConnected = OnClientConnected;
+                transport.OnClientDisconnected = OnClientDisconnected;
+                transport.OnClientReceive = OnClientReceive;
             }
 
             if (isAwake)
@@ -80,16 +79,28 @@ namespace JFramework.Net
 
             InvokeRepeating(nameof(HeartBeat), heratBeat, heratBeat);
 
-            void ClientConnected()
+            void OnClientConnected()
             {
                 isRelay = true;
             }
 
-            void ClientDisconnected()
+            void OnClientDisconnected()
             {
                 isRelay = false;
                 isActive = false;
                 OnDisconnect?.Invoke();
+            }
+
+            void OnClientReceive(ArraySegment<byte> segment, Channel channel)
+            {
+                try
+                {
+                    ClientReceive(segment, channel);
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning(e);
+                }
             }
         }
 
@@ -118,172 +129,165 @@ namespace JFramework.Net
 
         private void ClientReceive(ArraySegment<byte> segment, Channel channel)
         {
-            try
+            var data = segment.Array;
+            var position = segment.Offset;
+            var key = data.ReadByte(ref position);
+            var opcode = (OpCodes)key;
+            if (key < 200)
             {
-                var data = segment.Array;
-                var position = segment.Offset;
-                var key = data.ReadByte(ref position);
-                var opcode = (OpCodes)key;
-                if (key < 200)
+                Console.WriteLine(opcode);
+            }
+
+            if (opcode == OpCodes.Connected)
+            {
+                position = 0;
+                buffers.WriteByte(ref position, (byte)OpCodes.Authority);
+                buffers.WriteString(ref position, serverKey);
+                transport.ClientSend(new ArraySegment<byte>(buffers, 0, position), channel);
+            }
+            else if (opcode == OpCodes.Authority)
+            {
+                isActive = true;
+                RequestServerList();
+            }
+            else if (opcode == OpCodes.CreateRoom)
+            {
+                serverId = data.ReadString(ref position);
+                RequestServerList();
+            }
+            else if (opcode == OpCodes.JoinRoom)
+            {
+                int clientId = data.ReadInt(ref position);
+                if (isClient)
                 {
-                    Console.WriteLine(opcode);
+                    OnClientConnected?.Invoke();
                 }
 
-                if (opcode == OpCodes.Connected)
+                if (isServer)
                 {
-                    position = 0;
-                    buffers.WriteByte(ref position, (byte)OpCodes.Authority);
-                    buffers.WriteString(ref position, serverKey);
-                    transport.ClientSend(new ArraySegment<byte>(buffers, 0, position), channel);
+                    clients.Add(clientId, memberId);
+                    OnServerConnected?.Invoke(memberId);
+                    memberId++;
                 }
-                else if (opcode == OpCodes.Authority)
+            }
+            else if (opcode == OpCodes.UpdateData)
+            {
+                var bytes = data.ReadBytes(ref position);
+                if (isServer)
                 {
-                    isActive = true;
-                    RequestServerList();
-                }
-                else if (opcode == OpCodes.UpdateData)
-                {
-                    var bytes = data.ReadBytes(ref position);
-                    if (isServer)
+                    if (clients.TryGetFirst(data.ReadInt(ref position), out int clientId))
                     {
-                        if (clients.TryGetFirst(data.ReadInt(ref position), out int clientId))
-                        {
-                            OnServerReceive?.Invoke(clientId, new ArraySegment<byte>(bytes), channel);
-                        }
+                        OnServerReceive?.Invoke(clientId, new ArraySegment<byte>(bytes), channel);
                     }
+                }
 
-                    if (isClient)
-                    {
-                        OnClientReceive?.Invoke(new ArraySegment<byte>(bytes), channel);
-                    }
-                }
-                else if (opcode == OpCodes.LeaveRoom)
+                if (isClient)
                 {
-                    if (isClient)
-                    {
-                        isClient = false;
-                        OnClientDisconnected?.Invoke();
-                    }
+                    OnClientReceive?.Invoke(new ArraySegment<byte>(bytes), channel);
                 }
-                else if (opcode == OpCodes.Disconnect)
+            }
+            else if (opcode == OpCodes.LeaveRoom)
+            {
+                if (isClient)
                 {
-                    if (isServer)
-                    {
-                        int client = data.ReadInt(ref position);
-                        if (clients.TryGetFirst(client, out int clientId))
-                        {
-                            OnServerDisconnected?.Invoke(clients.GetFirst(clientId));
-                            clients.Remove(client);
-                        }
-                    }
+                    isClient = false;
+                    OnClientDisconnected?.Invoke();
                 }
-                else if (opcode == OpCodes.CreateRoom)
+            }
+            else if (opcode == OpCodes.Disconnect)
+            {
+                if (isServer)
                 {
-                    serverId = data.ReadString(ref position);
-                    RequestServerList();
-                }
-                else if (opcode == OpCodes.JoinRoom)
-                {
-                    int clientId = data.ReadInt(ref position);
-                    if (isClient)
+                    int client = data.ReadInt(ref position);
+                    if (clients.TryGetFirst(client, out int clientId))
                     {
-                        OnClientConnected?.Invoke();
-                    }
-
-                    if (isServer)
-                    {
-                        clients.Add(clientId, memberId);
-                        OnServerConnected?.Invoke(memberId);
-                        memberId++;
-                    }
-                }
-                else if (opcode == OpCodes.NATAddress)
-                {
-                    var newIp = data.ReadString(ref position);
-                    var newPort = data.ReadInt(ref position);
-                    var punched = data.ReadBool(ref position);
-                    clientEndPoint = new IPEndPoint(IPAddress.Parse(newIp), newPort);
-
-                    Debug.LogWarning(clientEndPoint);
-                    if (isPunch && punched)
-                    {
-                        StartCoroutine(NATPunch(clientEndPoint));
-                    }
-
-                    if (!isServer)
-                    {
-                        if (socketProxy == null && isPunch && punched)
-                        {
-                            socketProxy = new SocketProxy(punchEndPoint.Port - 1);
-                            socketProxy.OnReceive += ClientProcessProxyData;
-                        }
-                        
-                        if (isPunch && punched)
-                        {
-                            if (newIp == "127.0.0.1")
-                            {
-                                puncher.JoinServer("127.0.0.1", newPort + 1);
-                            }
-                            else
-                            {
-                                puncher.JoinServer("127.0.0.1", punchEndPoint.Port - 1);
-                            }
-                        }
-                        else
-                        {
-                            puncher.JoinServer(newIp, newPort);
-                        }
-                    }
-                }
-                else if (opcode == OpCodes.NATRequest)
-                {
-                    var clientIp = GetAddress();
-                    if (isPunch && puncher != null && clientIp != null)
-                    {
-                        var punchId = data.ReadString(ref position);
-                        var punchPort = (ushort)data.ReadInt(ref position);
-                        if (punchClient == null)
-                        {
-                            punchClient = new UdpClient { ExclusiveAddressUse = false };
-                            while (true)
-                            {
-                                try
-                                {
-                                    punchEndPoint = new IPEndPoint(IPAddress.Parse(clientIp), Random.Range(16000, 17000));
-                                    punchClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-                                    punchClient.Client.Bind(punchEndPoint);
-                                    Debug.LogWarning(punchEndPoint);
-                                    break;
-                                }
-                                catch
-                                {
-                                    // ignored
-                                }
-                            }
-                        }
-
-                        if (!IPAddress.TryParse(address, out var ip))
-                        {
-                            ip = Dns.GetHostEntry(address).AddressList[0];
-                        }
-
-                        var buffer = new byte[150];
-                        position = 0;
-                        buffer.WriteBool(ref position, true);
-                        buffer.WriteString(ref position, punchId);
-                        remoteEndPoint = new IPEndPoint(ip, punchPort);
-                        for (int attempts = 0; attempts < 3; attempts++)
-                        {
-                            punchClient.Send(buffer, position, remoteEndPoint);
-                        }
-
-                        punchClient.BeginReceive(ReceiveData, punchClient);
+                        OnServerDisconnected?.Invoke(clients.GetFirst(clientId));
+                        clients.Remove(client);
                     }
                 }
             }
-            catch (Exception e)
+            else if (opcode == OpCodes.NATAddress)
             {
-                Debug.LogWarning(e.ToString());
+                var newIp = data.ReadString(ref position);
+                var newPort = data.ReadInt(ref position);
+                var punched = data.ReadBool(ref position);
+                clientEndPoint = new IPEndPoint(IPAddress.Parse(newIp), newPort);
+
+                Debug.LogWarning(clientEndPoint);
+                if (isPunch && punched)
+                {
+                    StartCoroutine(NATPunch(clientEndPoint));
+                }
+
+                if (!isServer)
+                {
+                    if (socketProxy == null && isPunch && punched)
+                    {
+                        socketProxy = new SocketProxy(punchEndPoint.Port - 1);
+                        socketProxy.OnReceive += ClientProcessProxyData;
+                    }
+
+                    if (isPunch && punched)
+                    {
+                        if (newIp == "127.0.0.1")
+                        {
+                            puncher.JoinServer("127.0.0.1", newPort + 1);
+                        }
+                        else
+                        {
+                            puncher.JoinServer("127.0.0.1", punchEndPoint.Port - 1);
+                        }
+                    }
+                    else
+                    {
+                        puncher.JoinServer(newIp, newPort);
+                    }
+                }
+            }
+            else if (opcode == OpCodes.NATRequest)
+            {
+                var clientIp = GetAddress();
+                if (isPunch && puncher != null && clientIp != null)
+                {
+                    var punchId = data.ReadString(ref position);
+                    var punchPort = (ushort)data.ReadInt(ref position);
+                    if (punchClient == null)
+                    {
+                        punchClient = new UdpClient { ExclusiveAddressUse = false };
+                        while (true)
+                        {
+                            try
+                            {
+                                punchEndPoint = new IPEndPoint(IPAddress.Parse(clientIp), Random.Range(16000, 17000));
+                                punchClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+                                punchClient.Client.Bind(punchEndPoint);
+                                Debug.LogWarning(punchEndPoint);
+                                break;
+                            }
+                            catch
+                            {
+                                // ignored
+                            }
+                        }
+                    }
+
+                    if (!IPAddress.TryParse(address, out var ip))
+                    {
+                        ip = Dns.GetHostEntry(address).AddressList[0];
+                    }
+
+                    var buffer = new byte[150];
+                    position = 0;
+                    buffer.WriteBool(ref position, true);
+                    buffer.WriteString(ref position, punchId);
+                    remoteEndPoint = new IPEndPoint(ip, punchPort);
+                    for (int attempts = 0; attempts < 3; attempts++)
+                    {
+                        punchClient.Send(buffer, position, remoteEndPoint);
+                    }
+
+                    punchClient.BeginReceive(ReceiveData, punchClient);
+                }
             }
         }
 
@@ -373,7 +377,7 @@ namespace JFramework.Net
         {
             for (int i = 0; i < 10; i++)
             {
-                punchClient.Send(punchData, 1, endPoint);
+                punchClient.Send(new byte[] { 1 }, 1, endPoint);
                 yield return new WaitForSeconds(0.25f);
             }
         }
