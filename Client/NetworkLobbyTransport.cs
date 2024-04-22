@@ -514,8 +514,8 @@ namespace JFramework.Net
             buffers.WriteByte(ref position, (byte)OpCodes.CreateRoom);
             buffers.WriteString(ref position, roomName);
             buffers.WriteString(ref position, roomData);
-            buffers.WriteBool(ref position, isPublic);
             buffers.WriteInt(ref position, maxPlayers);
+            buffers.WriteBool(ref position, isPublic);
             if (isPunch && puncher != null && clientIp != null)
             {
                 buffers.WriteString(ref position, clientIp);

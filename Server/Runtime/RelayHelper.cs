@@ -103,23 +103,6 @@ namespace JFramework.Net
                 }
                 else if (opcode == OpCodes.CreateRoom)
                 {
-                    var name = data.ReadString(ref position);
-                    var roomData = data.ReadString(ref position);
-                    var active = data.ReadBool(ref position);
-                    var count = data.ReadInt(ref position);
-                    var address = data.ReadString(ref position);
-                    var port = data.ReadInt(ref position);
-                    var isPunch = data.ReadBool(ref position);
-                    var punching = data.ReadBool(ref position);
-
-                    Console.WriteLine("Name: " + name);
-                    Console.WriteLine("Data: " + roomData);
-                    Console.WriteLine("Active: " + active);
-                    Console.WriteLine("Count: " + count);
-                    Console.WriteLine("Address: " + address + ":" + port);
-                    Console.WriteLine("IsPunch: " + isPunch);
-                    Console.WriteLine("Punching: " + punching);
-
                     ServerDisconnected(clientId);
                     Program.instance.connections.TryGetValue(clientId, out var connection);
                     string id;
@@ -131,21 +114,21 @@ namespace JFramework.Net
                     var room = new Room
                     {
                         id = id,
-                        name = name,
-                        data = roomData,
+                        name = data.ReadString(ref position),
+                        data = data.ReadString(ref position),
                         owner = clientId,
-                        count = count,
-                        active = active,
+                        count = data.ReadInt(ref position),
+                        active = data.ReadBool(ref position),
                         players = new List<int>(),
-                        port = port,
-                        address = address,
-                        isPunch = isPunch,
-                        punching = connection != null && punching,
+                        address = data.ReadString(ref position),
+                        port = data.ReadInt(ref position),
+                        isPunch = data.ReadBool(ref position),
+                        punching = connection != null && data.ReadBool(ref position),
                         proxy = connection,
                     };
                     rooms.Add(room.id, room);
                     clients.Add(clientId, room);
-                    Console.WriteLine($"客户端 {clientId} 创建房间。" + room.id + " " + (connection == null ? "Null" : connection) + " " + address);
+                    Console.WriteLine($"客户端 {clientId} 创建房间。{room.id} {(connection == null ? "Null" : connection)} {room.address}");
 
                     position = 0;
                     var buffer = buffers.Rent(50);
@@ -172,7 +155,9 @@ namespace JFramework.Net
                             if (connection.Address.Equals(room.proxy.Address))
                             {
                                 buffer.WriteString(ref position, room.address == address ? "127.0.0.1" : room.address);
-                                Console.WriteLine("SendToClient:" + room.address + " " + address + " " + room.address == address ? "127.0.0.1" + ":" + room.proxy.Port : room.address + ":" + room.proxy.Port);
+                                Console.WriteLine("SendToClient:" + room.address + " " + address + " " + room.address == address
+                                    ? "127.0.0.1" + ":" + room.proxy.Port
+                                    : room.address + ":" + room.proxy.Port);
                             }
                             else
                             {
