@@ -1,9 +1,8 @@
 ﻿using System;
+using JFramework;
 using JFramework.Net;
-using UnityEngine;
 
-[RequireComponent(typeof(NetworkTransport))]
-public class NetworkProxyTransport : MonoBehaviour
+public class NetworkProxyTransport : Component<NetworkLobbyTransport>
 {
     /// <summary>
     /// 使用的传输
@@ -20,20 +19,19 @@ public class NetworkProxyTransport : MonoBehaviour
     /// </summary>
     private void Awake()
     {
-        transport = GetComponent<NetworkTransport>();
-        var lobby = GetComponentInParent<NetworkLobbyTransport>();
-        transport.OnServerConnected -= lobby.NATServerConnected;
-        transport.OnServerReceive -= lobby.NATServerReceive;
-        transport.OnServerDisconnected -= lobby.NATServerDisconnected;
-        transport.OnClientConnected -= lobby.NATClientConnected;
-        transport.OnClientReceive -= lobby.NATClientReceive;
-        transport.OnClientDisconnected -= lobby.NATClientDisconnected;
-        transport.OnServerConnected += lobby.NATServerConnected;
-        transport.OnServerReceive += lobby.NATServerReceive;
-        transport.OnServerDisconnected += lobby.NATServerDisconnected;
-        transport.OnClientConnected += lobby.NATClientConnected;
-        transport.OnClientReceive += lobby.NATClientReceive;
-        transport.OnClientDisconnected += lobby.NATClientDisconnected;
+        transport = owner.puncher;
+        transport.OnServerConnected -= owner.NATServerConnected;
+        transport.OnServerReceive -= owner.NATServerReceive;
+        transport.OnServerDisconnected -= owner.NATServerDisconnected;
+        transport.OnClientConnected -= owner.NATClientConnected;
+        transport.OnClientReceive -= owner.NATClientReceive;
+        transport.OnClientDisconnected -= owner.NATClientDisconnected;
+        transport.OnServerConnected += owner.NATServerConnected;
+        transport.OnServerReceive += owner.NATServerReceive;
+        transport.OnServerDisconnected += owner.NATServerDisconnected;
+        transport.OnClientConnected += owner.NATClientConnected;
+        transport.OnClientReceive += owner.NATClientReceive;
+        transport.OnClientDisconnected += owner.NATClientDisconnected;
     }
 
     /// <summary>

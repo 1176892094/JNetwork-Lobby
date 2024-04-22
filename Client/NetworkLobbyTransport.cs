@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using JFramework.Interface;
 using UnityEngine;
 using UnityEngine.Networking;
 using Random = UnityEngine.Random;
@@ -11,12 +12,12 @@ using Random = UnityEngine.Random;
 namespace JFramework.Net
 {
     [DefaultExecutionOrder(1001)]
-    public partial class NetworkLobbyTransport : Transport
+    public partial class NetworkLobbyTransport : Transport, IEntity
     {
         public Transport transport;
+        public Transport puncher;
         public bool isAwake = true;
         public float heratBeat = 3;
-        public bool isPunch;
         public string serverId;
         public string serverKey = "Secret Key";
         public string roomName = "Game Room";
@@ -24,9 +25,6 @@ namespace JFramework.Net
         public int maxPlayers = 10;
         public bool isPublic = true;
         public List<Room> rooms = new List<Room>();
-
-        public event Action OnRoomUpdate;
-        public event Action OnDisconnect;
 
         private int index;
         private bool isInit;
@@ -41,10 +39,14 @@ namespace JFramework.Net
         private IPEndPoint remoteEndPoint;
         private IPEndPoint clientEndPoint;
         private SocketProxy socketProxy;
-        private NetworkProxyTransport puncher;
+        private NetworkProxyTransport clientProxy;
         private HashMap<int, int> clients = new HashMap<int, int>();
         private HashMap<int, int> connnections = new HashMap<int, int>();
         private readonly HashMap<IPEndPoint, SocketProxy> proxies = new HashMap<IPEndPoint, SocketProxy>();
+
+        public event Action OnRoomUpdate;
+        public event Action OnDisconnect;
+        public bool isPunch => puncher != null;
 
         private void Awake()
         {
@@ -54,11 +56,10 @@ namespace JFramework.Net
                 return;
             }
 
-            puncher = GetComponentInChildren<NetworkProxyTransport>();
-            if (isPunch && puncher != null)
+            clientProxy = this.FindComponent<NetworkProxyTransport>();
+            if (isPunch && puncher is not NetworkTransport)
             {
                 Debug.Log("请使用 NetworkTransport 进行NAT传输");
-                isPunch = false;
             }
 
             if (!isInit)
@@ -209,7 +210,7 @@ namespace JFramework.Net
             else if (opcode == OpCodes.NATPuncher)
             {
                 var clientIp = GetAddress();
-                if (isPunch && puncher != null && clientIp != null)
+                if (isPunch && clientProxy != null && clientIp != null)
                 {
                     var punchId = data.ReadString(ref position);
                     var punchPort = (ushort)data.ReadInt(ref position);
@@ -276,16 +277,16 @@ namespace JFramework.Net
                     {
                         if (newIp == "127.0.0.1")
                         {
-                            puncher.JoinServer("127.0.0.1", newPort + 1);
+                            clientProxy.JoinServer("127.0.0.1", newPort + 1);
                         }
                         else
                         {
-                            puncher.JoinServer("127.0.0.1", punchEndPoint.Port - 1);
+                            clientProxy.JoinServer("127.0.0.1", punchEndPoint.Port - 1);
                         }
                     }
                     else
                     {
-                        puncher.JoinServer(newIp, newPort);
+                        clientProxy.JoinServer(newIp, newPort);
                     }
                 }
             }
@@ -361,7 +362,7 @@ namespace JFramework.Net
 
         public async void UpdateRoom()
         {
-            if (isActive && isLobby)
+            if (isLobby && isActive)
             {
                 var uri = $"http://{address}:{port}/api/compressed/servers";
                 using var request = UnityWebRequest.Get(uri);
@@ -442,9 +443,9 @@ namespace JFramework.Net
             punching = false;
             buffers.WriteByte(ref position, (byte)OpCodes.JoinRoom);
             buffers.WriteString(ref position, transport.address);
-            buffers.WriteBool(ref position, puncher != null);
+            buffers.WriteBool(ref position, clientProxy != null);
 
-            if (puncher == null)
+            if (clientProxy == null)
             {
                 buffers.WriteString(ref position, "0.0.0.0");
             }
@@ -461,7 +462,7 @@ namespace JFramework.Net
         {
             if (punching)
             {
-                puncher.ClientSend(segment, channel);
+                clientProxy.ClientSend(segment, channel);
             }
             else
             {
@@ -480,9 +481,9 @@ namespace JFramework.Net
             buffers.WriteByte(ref position, (byte)OpCodes.LeaveRoom);
             transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
 
-            if (puncher != null)
+            if (clientProxy != null)
             {
-                puncher.ClientDisconnect();
+                clientProxy.ClientDisconnect();
             }
         }
 
@@ -519,10 +520,10 @@ namespace JFramework.Net
             buffers.WriteString(ref position, roomData);
             buffers.WriteInt(ref position, maxPlayers);
             buffers.WriteBool(ref position, isPublic);
-            if (isPunch && puncher != null && clientIp != null)
+            if (isPunch && clientProxy != null && clientIp != null)
             {
                 buffers.WriteString(ref position, clientIp);
-                puncher.StartServer(isPunch ? punchEndPoint.Port + 1 : -1);
+                clientProxy.StartServer(isPunch ? punchEndPoint.Port + 1 : -1);
             }
             else
             {
@@ -535,19 +536,19 @@ namespace JFramework.Net
             }
             else
             {
-                buffers.WriteInt(ref position, puncher == null ? 1 : puncher.port);
+                buffers.WriteInt(ref position, clientProxy == null ? 1 : clientProxy.port);
             }
 
             buffers.WriteBool(ref position, isPunch);
-            buffers.WriteBool(ref position, puncher != null && clientIp != null);
+            buffers.WriteBool(ref position, clientProxy != null && clientIp != null);
             transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
         }
 
         public override void ServerSend(int clientId, ArraySegment<byte> segment, Channel channel = Channel.Reliable)
         {
-            if (puncher != null && connnections.TryGetSecond(clientId, out int connection))
+            if (clientProxy != null && connnections.TryGetSecond(clientId, out int connection))
             {
-                puncher.ServerSend(connection, segment, channel);
+                clientProxy.ServerSend(connection, segment, channel);
             }
             else
             {
@@ -572,7 +573,7 @@ namespace JFramework.Net
 
             if (connnections.TryGetSecond(clientId, out int connection))
             {
-                puncher.ServerDisconnect(connection);
+                clientProxy.ServerDisconnect(connection);
             }
         }
 
@@ -596,9 +597,9 @@ namespace JFramework.Net
                 buffers.WriteByte(ref position, (byte)OpCodes.LeaveRoom);
                 transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
 
-                if (puncher != null)
+                if (clientProxy != null)
                 {
-                    puncher.StopServer();
+                    clientProxy.StopServer();
                 }
 
                 var keys = new List<IPEndPoint>(proxies.Keys);
@@ -624,9 +625,9 @@ namespace JFramework.Net
         {
             transport.ClientEarlyUpdate();
 
-            if (puncher != null)
+            if (clientProxy != null)
             {
-                puncher.ClientEarlyUpdate();
+                clientProxy.ClientEarlyUpdate();
             }
         }
 
@@ -634,25 +635,25 @@ namespace JFramework.Net
         {
             transport.ClientAfterUpdate();
 
-            if (puncher != null)
+            if (clientProxy != null)
             {
-                puncher.ClientAfterUpdate();
+                clientProxy.ClientAfterUpdate();
             }
         }
 
         public override void ServerEarlyUpdate()
         {
-            if (puncher != null)
+            if (clientProxy != null)
             {
-                puncher.ServerEarlyUpdate();
+                clientProxy.ServerEarlyUpdate();
             }
         }
 
         public override void ServerAfterUpdate()
         {
-            if (puncher != null)
+            if (clientProxy != null)
             {
-                puncher.ServerAfterUpdate();
+                clientProxy.ServerAfterUpdate();
             }
         }
     }
@@ -733,6 +734,13 @@ namespace JFramework.Net
             public string data;
             public int count;
             public int current;
+        }
+
+        public enum State
+        {
+            Connected,
+            Authority,
+            Disconnected,
         }
 
         public enum OpCodes
