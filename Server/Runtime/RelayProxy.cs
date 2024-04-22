@@ -1,10 +1,8 @@
-﻿using System;
-using Grapevine;
+﻿using Grapevine;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
-using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 
@@ -18,7 +16,7 @@ namespace JFramework.Net
         {
             if (Program.setting.EndPointServerList)
             {
-                string json = JsonConvert.SerializeObject(Program.instance.GetRooms());
+                var json = JsonConvert.SerializeObject(Program.instance.rooms);
                 await context.Response.SendResponseAsync(json.Compress());
             }
             else
@@ -30,18 +28,12 @@ namespace JFramework.Net
 
     public class RelayProxyServer
     {
-        public bool Start(ushort port = 8080)
+        public bool StartServer(ushort port = 8080)
         {
             try
             {
-                var builder = new ConfigurationBuilder();
-                var config = builder.SetBasePath(Directory.GetCurrentDirectory()).AddJsonFile("appsettings.json", true, true).Build();
-                var server = new RestServerBuilder(new ServiceCollection(), config, services =>
-                {
-                    services.AddLogging(configure => configure.AddConsole());
-                    services.Configure<LoggerFilterOptions>(options => options.MinLevel = LogLevel.None);
-                }, server => server.Prefixes.Add($"http://*:{port}/")).Build();
-
+                var config = new ConfigurationBuilder().SetBasePath(Directory.GetCurrentDirectory()).AddJsonFile("appsettings.json", true, true).Build();
+                var server = new RestServerBuilder(new ServiceCollection(), config, ConfigureSerivces, ConfigureServer).Build();
                 server.Router.Options.SendExceptionMessages = false;
                 server.Start();
                 return true;
@@ -49,6 +41,17 @@ namespace JFramework.Net
             catch
             {
                 return false;
+            }
+
+            void ConfigureSerivces(IServiceCollection services)
+            {
+                services.AddLogging(builder => builder.AddConsole());
+                services.Configure<LoggerFilterOptions>(options => options.MinLevel = LogLevel.None);
+            }
+
+            void ConfigureServer(IRestServer server)
+            {
+                server.Prefixes.Add($"http://*:{port}/");
             }
         }
     }
