@@ -69,7 +69,10 @@ public class NetworkProxyTransport : Component<NetworkLobbyTransport>
     /// </summary>
     public void StopServer()
     {
-        transport.StopServer();
+        if (transport != null)
+        {
+            transport.StopServer();
+        }
     }
 
     /// <summary>
@@ -78,7 +81,10 @@ public class NetworkProxyTransport : Component<NetworkLobbyTransport>
     /// <param name="clientId"></param>
     public void ServerDisconnect(int clientId)
     {
-        transport.ServerDisconnect(clientId);
+        if (transport != null)
+        {
+            transport.ServerDisconnect(clientId);
+        }
     }
 
     /// <summary>
@@ -86,7 +92,10 @@ public class NetworkProxyTransport : Component<NetworkLobbyTransport>
     /// </summary>
     public void ClientDisconnect()
     {
-        transport.ClientDisconnect();
+        if (transport != null)
+        {
+            transport.ClientDisconnect();
+        }
     }
 
     /// <summary>
@@ -97,7 +106,10 @@ public class NetworkProxyTransport : Component<NetworkLobbyTransport>
     /// <param name="channel"></param>
     public void ServerSend(int clientId, ArraySegment<byte> segment, Channel channel)
     {
-        transport.ServerSend(clientId, segment, channel);
+        if (transport != null)
+        {
+            transport.ServerSend(clientId, segment, channel);
+        }
     }
 
     /// <summary>
@@ -107,7 +119,10 @@ public class NetworkProxyTransport : Component<NetworkLobbyTransport>
     /// <param name="channel"></param>
     public void ClientSend(ArraySegment<byte> segment, Channel channel)
     {
-        transport.ClientSend(segment, channel);
+        if (transport != null)
+        {
+            transport.ClientSend(segment, channel);
+        }
     }
 
     /// <summary>
@@ -115,7 +130,10 @@ public class NetworkProxyTransport : Component<NetworkLobbyTransport>
     /// </summary>
     public void ClientEarlyUpdate()
     {
-        transport.ClientEarlyUpdate();
+        if (transport != null)
+        {
+            transport.ClientEarlyUpdate();
+        }
     }
 
     /// <summary>
@@ -123,7 +141,10 @@ public class NetworkProxyTransport : Component<NetworkLobbyTransport>
     /// </summary>
     public void ClientAfterUpdate()
     {
-        transport.ClientAfterUpdate();
+        if (transport != null)
+        {
+            transport.ClientAfterUpdate();
+        }
     }
 
     /// <summary>
@@ -131,7 +152,10 @@ public class NetworkProxyTransport : Component<NetworkLobbyTransport>
     /// </summary>
     public void ServerEarlyUpdate()
     {
-        transport.ServerEarlyUpdate();
+        if (transport != null)
+        {
+            transport.ServerEarlyUpdate();
+        }
     }
 
     /// <summary>
@@ -139,6 +163,9 @@ public class NetworkProxyTransport : Component<NetworkLobbyTransport>
     /// </summary>
     public void ServerAfterUpdate()
     {
-        transport.ServerAfterUpdate();
+        if (transport != null)
+        {
+            transport.ServerAfterUpdate();
+        }
     }
 }
