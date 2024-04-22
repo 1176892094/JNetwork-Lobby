@@ -13,43 +13,12 @@ namespace JFramework.Net
     [RestResource]
     public class RelayProxy
     {
-        private List<Room> rooms => Program.instance.GetRooms();
-
-        private RelayStats stats => new RelayStats
-        {
-            ConnectedClients = Program.instance.Count(),
-            RoomCount = Program.instance.GetRooms().Count,
-            PublicRoomCount = Program.instance.GetPublicRoomCount(),
-            Uptime = Program.instance.SinceTime()
-        };
-
-        [RestRoute("Get", "/api/stats")]
-        public async Task Stats(IHttpContext context)
-        {
-            string json = JsonConvert.SerializeObject(stats, Formatting.Indented);
-            await context.Response.SendResponseAsync(json);
-        }
-
-        [RestRoute("Get", "/api/servers")]
-        public async Task ServerList(IHttpContext context)
-        {
-            if (Program.setting.EndPointServerList)
-            {
-                string json = JsonConvert.SerializeObject(rooms, Formatting.Indented);
-                await context.Response.SendResponseAsync(json);
-            }
-            else
-            {
-                await context.Response.SendResponseAsync(HttpStatusCode.Forbidden);
-            }
-        }
-
         [RestRoute("Get", "/api/compressed/servers")]
         public async Task ServerListCompressed(IHttpContext context)
         {
             if (Program.setting.EndPointServerList)
             {
-                string json = JsonConvert.SerializeObject(rooms);
+                string json = JsonConvert.SerializeObject(Program.instance.GetRooms());
                 await context.Response.SendResponseAsync(json.Compress());
             }
             else

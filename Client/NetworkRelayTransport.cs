@@ -741,7 +741,7 @@ namespace JFramework.Net
             public string serverId;
             public string serverName;
             public string serverData;
-            public int currentPlayers;
+            public int curPlayers;
             public int maxPlayers;
         }
 

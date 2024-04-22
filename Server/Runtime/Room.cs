@@ -1,5 +1,4 @@
-﻿using System;
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 using System.Collections.Generic;
 using System.Net;
 
@@ -15,8 +14,10 @@ namespace JFramework.Net
         public bool isPublic;
         public int maxPlayers;
         public List<int> clients;
+        
         [JsonIgnore] public int port;
         [JsonIgnore] public string address;
+        
         [JsonIgnore] public bool isPunch;
         [JsonIgnore] public bool isDirect;
         [JsonIgnore] public IPEndPoint proxy;
@@ -40,14 +41,5 @@ namespace JFramework.Net
         Disconnect = 8,
         NATRequest = 9,
         NATAddress = 10,
-    }
-
-    [Serializable]
-    internal struct RelayStats
-    {
-        public int ConnectedClients;
-        public int RoomCount;
-        public int PublicRoomCount;
-        public TimeSpan Uptime;
     }
 }

@@ -212,7 +212,7 @@ namespace JFramework.Net
 
                     punchClient.Send(new byte[] { 1 }, 1, endPoint);
                 }
-                catch (Exception e)
+                catch
                 {
                     // ignored
                 }
