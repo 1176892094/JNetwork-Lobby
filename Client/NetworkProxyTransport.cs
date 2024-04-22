@@ -22,12 +22,18 @@ public class NetworkProxyTransport : MonoBehaviour
     {
         transport = GetComponent<NetworkTransport>();
         var lobby = GetComponentInParent<NetworkLobbyTransport>();
-        transport.OnServerConnected = lobby.NATServerConnected;
-        transport.OnServerReceive = lobby.NATServerReceive;
-        transport.OnServerDisconnected = lobby.NATServerDisconnected;
-        transport.OnClientConnected = lobby.NATClientConnected;
-        transport.OnClientReceive = lobby.NATClientReceive;
-        transport.OnClientDisconnected = lobby.NATClientDisconnected;
+        transport.OnServerConnected -= lobby.NATServerConnected;
+        transport.OnServerReceive -= lobby.NATServerReceive;
+        transport.OnServerDisconnected -= lobby.NATServerDisconnected;
+        transport.OnClientConnected -= lobby.NATClientConnected;
+        transport.OnClientReceive -= lobby.NATClientReceive;
+        transport.OnClientDisconnected -= lobby.NATClientDisconnected;
+        transport.OnServerConnected += lobby.NATServerConnected;
+        transport.OnServerReceive += lobby.NATServerReceive;
+        transport.OnServerDisconnected += lobby.NATServerDisconnected;
+        transport.OnClientConnected += lobby.NATClientConnected;
+        transport.OnClientReceive += lobby.NATClientReceive;
+        transport.OnClientDisconnected += lobby.NATClientDisconnected;
     }
 
     /// <summary>

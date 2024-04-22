@@ -64,9 +64,12 @@ namespace JFramework.Net
             if (!isInit)
             {
                 isInit = true;
-                transport.OnClientConnected = OnClientConnected;
-                transport.OnClientDisconnected = OnClientDisconnected;
-                transport.OnClientReceive = OnClientReceive;
+                transport.OnClientConnected -= OnClientConnected;
+                transport.OnClientDisconnected -= OnClientDisconnected;
+                transport.OnClientReceive -= OnClientReceive;
+                transport.OnClientConnected += OnClientConnected;
+                transport.OnClientDisconnected += OnClientDisconnected;
+                transport.OnClientReceive += OnClientReceive;
             }
 
             if (isAwake)
@@ -195,11 +198,11 @@ namespace JFramework.Net
             {
                 if (isServer)
                 {
-                    int client = data.ReadInt(ref position);
-                    if (clients.TryGetFirst(client, out int clientId))
+                    int clientId = data.ReadInt(ref position);
+                    if (clients.Keys.Contains(clientId))
                     {
-                        OnServerDisconnected?.Invoke(clients.GetFirst(client));
-                        clients.Remove(client);
+                        OnServerDisconnected?.Invoke(clients.GetFirst(clientId));
+                        clients.Remove(clientId);
                     }
                 }
             }
