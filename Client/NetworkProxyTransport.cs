@@ -89,21 +89,21 @@ public class NetworkProxyTransport : MonoBehaviour
     /// 主机向客户端发送消息
     /// </summary>
     /// <param name="clientId"></param>
-    /// <param name="data"></param>
+    /// <param name="segment"></param>
     /// <param name="channel"></param>
-    public void ServerSend(int clientId, ArraySegment<byte> data, Channel channel)
+    public void ServerSend(int clientId, ArraySegment<byte> segment, Channel channel)
     {
-        transport.ServerSend(clientId, data, channel);
+        transport.ServerSend(clientId, segment, channel);
     }
 
     /// <summary>
     /// 客户端发送消息到主机
     /// </summary>
-    /// <param name="data"></param>
+    /// <param name="segment"></param>
     /// <param name="channel"></param>
-    public void ClientSend(ArraySegment<byte> data, Channel channel)
+    public void ClientSend(ArraySegment<byte> segment, Channel channel)
     {
-        transport.ClientSend(data, channel);
+        transport.ClientSend(segment, channel);
     }
 
     /// <summary>

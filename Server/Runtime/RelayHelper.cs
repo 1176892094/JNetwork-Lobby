@@ -157,8 +157,8 @@ namespace JFramework.Net
                 else if (opcode == OpCodes.JoinRoom)
                 {
                     var id = data.ReadString(ref position);
-                    var address = data.ReadString(ref position);
                     var isPunch = data.ReadBool(ref position);
+                    var address = data.ReadString(ref position);
                     ServerDisconnected(clientId);
                     if (rooms.TryGetValue(id, out var room) && room.players.Count < room.count)
                     {

@@ -42,7 +42,6 @@ namespace JFramework.Net
         private IPEndPoint clientEndPoint;
         private SocketProxy socketProxy;
         private NetworkProxyTransport puncher;
-
         private HashMap<int, int> clients = new HashMap<int, int>();
         private HashMap<int, int> connnections = new HashMap<int, int>();
         private readonly HashMap<IPEndPoint, SocketProxy> proxies = new HashMap<IPEndPoint, SocketProxy>();
@@ -52,6 +51,7 @@ namespace JFramework.Net
             if (transport is NetworkLobbyTransport)
             {
                 Debug.Log("请使用 NetworkTransport 进行传输");
+                return;
             }
 
             puncher = GetComponentInChildren<NetworkProxyTransport>();
@@ -198,8 +198,7 @@ namespace JFramework.Net
                     int client = data.ReadInt(ref position);
                     if (clients.TryGetFirst(client, out int clientId))
                     {
-                        Debug.Log(clientId);
-                        OnServerDisconnected?.Invoke(clients.GetFirst(clientId));
+                        OnServerDisconnected?.Invoke(clients.GetFirst(client));
                         clients.Remove(client);
                     }
                 }
@@ -231,9 +230,9 @@ namespace JFramework.Net
                         }
                     }
 
-                    if (!IPAddress.TryParse(address, out var ip))
+                    if (!IPAddress.TryParse(transport.address, out var ip))
                     {
-                        ip = Dns.GetHostEntry(address).AddressList[0];
+                        ip = Dns.GetHostEntry(transport.address).AddressList[0];
                     }
 
                     var buffer = new byte[150];
@@ -367,7 +366,7 @@ namespace JFramework.Net
                 var result = request.downloadHandler.text;
                 if (request.result != UnityWebRequest.Result.Success)
                 {
-                    Debug.LogWarning("无法获取服务器列表。"+$"{address}:{port}");
+                    Debug.LogWarning("无法获取服务器列表。" + $"{address}:{port}");
                     return;
                 }
 
@@ -435,11 +434,11 @@ namespace JFramework.Net
                 Debug.Log("客户端或服务器已经连接!");
                 return;
             }
-            
+
             int position = 0;
             punching = false;
             buffers.WriteByte(ref position, (byte)OpCodes.JoinRoom);
-            buffers.WriteString(ref position, address);
+            buffers.WriteString(ref position, transport.address);
             buffers.WriteBool(ref position, puncher != null);
 
             if (puncher == null)
@@ -466,7 +465,7 @@ namespace JFramework.Net
                 var position = 0;
                 buffers.WriteByte(ref position, (byte)OpCodes.UpdateData);
                 buffers.WriteBytes(ref position, segment.Array.Take(segment.Count).ToArray());
-                buffers.WriteInt(ref position, -1);
+                buffers.WriteInt(ref position, 0);
                 transport.ClientSend(new ArraySegment<byte>(buffers, 0, position), channel);
             }
         }
@@ -559,11 +558,11 @@ namespace JFramework.Net
 
         public override void ServerDisconnect(int clientId)
         {
-            if (clients.TryGetSecond(clientId, out int relayId))
+            if (clients.TryGetSecond(clientId, out int owner))
             {
                 var position = 0;
                 buffers.WriteByte(ref position, (byte)OpCodes.Disconnect);
-                buffers.WriteInt(ref position, relayId);
+                buffers.WriteInt(ref position, owner);
                 transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
                 return;
             }
@@ -697,7 +696,7 @@ namespace JFramework.Net
                 OnClientReceive?.Invoke(segment, channel);
             }
         }
-        
+
         public void NATClientDisconnected()
         {
             if (punching)
@@ -711,7 +710,7 @@ namespace JFramework.Net
                 isClient = true;
                 var position = 0;
                 buffers.WriteByte(ref position, (byte)OpCodes.JoinRoom);
-                buffers.WriteString(ref position, address);
+                buffers.WriteString(ref position, transport.address);
                 buffers.WriteBool(ref position, false);
                 transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
             }
