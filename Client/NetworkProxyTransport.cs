@@ -8,7 +8,12 @@ public class NetworkProxyTransport : MonoBehaviour
     /// <summary>
     /// 使用的传输
     /// </summary>
-    public Transport transport;
+    private Transport transport;
+
+    /// <summary>
+    /// 使用传输的端口
+    /// </summary>
+    public int port => transport.port;
 
     /// <summary>
     /// 初始化使用大厅的委托
@@ -99,5 +104,37 @@ public class NetworkProxyTransport : MonoBehaviour
     public void ClientSend(ArraySegment<byte> data, Channel channel)
     {
         transport.ClientSend(data, channel);
+    }
+
+    /// <summary>
+    /// 客户端Update之前
+    /// </summary>
+    public void ClientEarlyUpdate()
+    {
+        transport.ClientEarlyUpdate();
+    }
+
+    /// <summary>
+    /// 客户端Update之后
+    /// </summary>
+    public void ClientAfterUpdate()
+    {
+        transport.ClientAfterUpdate();
+    }
+
+    /// <summary>
+    /// 服务器Update之前
+    /// </summary>
+    public void ServerEarlyUpdate()
+    {
+        transport.ServerEarlyUpdate();
+    }
+
+    /// <summary>
+    /// 服务器Update之后
+    /// </summary>
+    public void ServerAfterUpdate()
+    {
+        transport.ServerAfterUpdate();
     }
 }

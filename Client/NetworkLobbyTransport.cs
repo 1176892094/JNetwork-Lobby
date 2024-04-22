@@ -533,7 +533,7 @@ namespace JFramework.Net
             }
             else
             {
-                buffers.WriteInt(ref position, puncher == null ? 1 : puncher.transport.port);
+                buffers.WriteInt(ref position, puncher == null ? 1 : puncher.port);
             }
 
             buffers.WriteBool(ref position, isPunch);
@@ -624,7 +624,7 @@ namespace JFramework.Net
 
             if (puncher != null)
             {
-                puncher.transport.ClientEarlyUpdate();
+                puncher.ClientEarlyUpdate();
             }
         }
 
@@ -634,7 +634,7 @@ namespace JFramework.Net
 
             if (puncher != null)
             {
-                puncher.transport.ClientAfterUpdate();
+                puncher.ClientAfterUpdate();
             }
         }
 
@@ -642,7 +642,7 @@ namespace JFramework.Net
         {
             if (puncher != null)
             {
-                puncher.transport.ServerEarlyUpdate();
+                puncher.ServerEarlyUpdate();
             }
         }
 
@@ -650,7 +650,7 @@ namespace JFramework.Net
         {
             if (puncher != null)
             {
-                puncher.transport.ServerAfterUpdate();
+                puncher.ServerAfterUpdate();
             }
         }
     }
