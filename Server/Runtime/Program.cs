@@ -85,7 +85,7 @@ namespace JFramework.Net
                             }
                         };
 
-                        relayHepler = new RelayHelper(transport.GetMaxPacketSize(0));
+                        relayHepler = new RelayHelper(transport.GetMaxPacketSize());
                         transport.OnServerReceive = relayHepler.ServerReceive;
                         transport.OnServerDisconnected = clientId =>
                         {

@@ -83,21 +83,4 @@ namespace JFramework.Net
         /// </summary>
         Unreliable = 2
     }
-
-    /// <summary>
-    /// 操作符
-    /// </summary>
-    public enum OpCodes
-    {
-        Connected = 1,
-        Authority = 2,
-        JoinRoom = 3,
-        CreateRoom = 4,
-        UpdateRoom = 5,
-        LeaveRoom = 6,
-        UpdateData = 7,
-        Disconnect = 8,
-        NATPuncher = 9,
-        NATAddress = 10,
-    }
 }
