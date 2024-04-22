@@ -9,7 +9,7 @@ public class NetworkNATPuncher : MonoBehaviour
 
     private void Awake()
     {
-        var lobby = GetComponent<NetworkRelayTransport>();
+        var lobby = GetComponent<NetworkLobbyTransport>();
 
         if (transport == null)
         {
@@ -17,7 +17,7 @@ public class NetworkNATPuncher : MonoBehaviour
             return;
         }
 
-        if (transport is NetworkRelayTransport)
+        if (transport is NetworkLobbyTransport)
         {
             Debug.Log("直连传输不能是中继！");
             return;

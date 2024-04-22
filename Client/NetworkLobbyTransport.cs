@@ -11,18 +11,18 @@ using Random = UnityEngine.Random;
 namespace JFramework.Net
 {
     [DefaultExecutionOrder(1001)]
-    public partial class NetworkRelayTransport : Transport
+    public partial class NetworkLobbyTransport : Transport
     {
         public Transport transport;
-        public string serverId;
         public bool isAwake = true;
         public float heratBeat = 3;
 
         public bool isPunch;
 
+        public string serverId;
         public string serverKey = "Secret Key";
-        public string serverName = "Game Room";
-        public string serverData = "Map 1";
+        public string roomName = "Game Room";
+        public string roomData = "Map 1";
         public int maxPlayers = 10;
         public bool isPublic = true;
         public List<Room> rooms = new List<Room>();
@@ -30,14 +30,13 @@ namespace JFramework.Net
         public event Action OnRoomUpdate;
         public event Action OnDisconnect;
 
-        private int memberId;
+        private int index;
         private bool isInit;
-        private bool isRelay;
+        private bool isLobby;
         private bool isClient;
         private bool isServer;
         private bool isActive;
         private bool punching;
-        private string roomId;
         private byte[] buffers;
         private UdpClient punchClient;
         private IPEndPoint punchEndPoint;
@@ -45,14 +44,14 @@ namespace JFramework.Net
         private IPEndPoint clientEndPoint;
         private SocketProxy socketProxy;
         private NetworkNATPuncher puncher;
-        
+
         private HashMap<int, int> clients = new HashMap<int, int>();
         private HashMap<int, int> connnections = new HashMap<int, int>();
         private readonly HashMap<IPEndPoint, SocketProxy> proxies = new HashMap<IPEndPoint, SocketProxy>();
 
         private void Awake()
         {
-            if (transport is NetworkRelayTransport)
+            if (transport is NetworkLobbyTransport)
             {
                 Debug.Log("请使用 NetworkTransport 进行传输");
             }
@@ -74,19 +73,19 @@ namespace JFramework.Net
 
             if (isAwake)
             {
-                ConnectToRelay();
+                ConnectToLobby();
             }
 
             InvokeRepeating(nameof(HeartBeat), heratBeat, heratBeat);
 
             void OnClientConnected()
             {
-                isRelay = true;
+                isLobby = true;
             }
 
             void OnClientDisconnected()
             {
-                isRelay = false;
+                isLobby = false;
                 isActive = false;
                 OnDisconnect?.Invoke();
             }
@@ -112,9 +111,9 @@ namespace JFramework.Net
             }
         }
 
-        public void ConnectToRelay()
+        public void ConnectToLobby()
         {
-            if (!isRelay)
+            if (!isLobby)
             {
                 transport.port = port;
                 transport.address = address;
@@ -165,9 +164,17 @@ namespace JFramework.Net
 
                 if (isServer)
                 {
-                    clients.Add(clientId, memberId);
-                    OnServerConnected?.Invoke(memberId);
-                    memberId++;
+                    clients.Add(clientId, index);
+                    OnServerConnected?.Invoke(index);
+                    index++;
+                }
+            }
+            else if (opcode == OpCodes.LeaveRoom)
+            {
+                if (isClient)
+                {
+                    isClient = false;
+                    OnClientDisconnected?.Invoke();
                 }
             }
             else if (opcode == OpCodes.UpdateData)
@@ -184,14 +191,6 @@ namespace JFramework.Net
                 if (isClient)
                 {
                     OnClientReceive?.Invoke(new ArraySegment<byte>(bytes), channel);
-                }
-            }
-            else if (opcode == OpCodes.LeaveRoom)
-            {
-                if (isClient)
-                {
-                    isClient = false;
-                    OnClientDisconnected?.Invoke();
                 }
             }
             else if (opcode == OpCodes.Disconnect)
@@ -346,7 +345,7 @@ namespace JFramework.Net
 
         private void HeartBeat()
         {
-            if (isRelay)
+            if (isLobby)
             {
                 var position = 0;
                 buffers.WriteByte(ref position, byte.MaxValue);
@@ -363,7 +362,7 @@ namespace JFramework.Net
 
         public void RequestServerList()
         {
-            if (isActive && isRelay)
+            if (isActive && isLobby)
             {
                 GetServerList();
             }
@@ -390,7 +389,7 @@ namespace JFramework.Net
             var result = request.downloadHandler.text;
             if (request.result != UnityWebRequest.Result.Success)
             {
-                Debug.LogWarning("无法获取服务器列表。");
+                Debug.LogWarning("无法获取服务器列表。"+$"{address}:{port}");
                 return;
             }
 
@@ -423,7 +422,7 @@ namespace JFramework.Net
         }
     }
 
-    public partial class NetworkRelayTransport
+    public partial class NetworkLobbyTransport
     {
         public override void ClientConnect(Uri uri = null)
         {
@@ -432,7 +431,7 @@ namespace JFramework.Net
                 address = uri.Host;
             }
 
-            if (!isRelay)
+            if (!isLobby)
             {
                 Debug.Log("没有连接到中继!");
                 OnClientDisconnected?.Invoke();
@@ -444,8 +443,7 @@ namespace JFramework.Net
                 Debug.Log("客户端或服务器已经连接!");
                 return;
             }
-
-            roomId = address;
+            
             int position = 0;
             punching = false;
             buffers.WriteByte(ref position, (byte)OpCodes.JoinRoom);
@@ -496,7 +494,7 @@ namespace JFramework.Net
 
         public override void StartServer()
         {
-            if (!isRelay)
+            if (!isLobby)
             {
                 Debug.Log("没有连接到中继!");
                 return;
@@ -508,7 +506,7 @@ namespace JFramework.Net
                 return;
             }
 
-            memberId = 1;
+            index = 1;
             isServer = true;
             clients = new HashMap<int, int>();
             connnections = new HashMap<int, int>();
@@ -523,12 +521,11 @@ namespace JFramework.Net
             var position = 0;
             var clientIp = GetAddress();
             buffers.WriteByte(ref position, (byte)OpCodes.CreateRoom);
-            buffers.WriteInt(ref position, maxPlayers);
-            buffers.WriteString(ref position, serverName);
+            buffers.WriteString(ref position, roomName);
+            buffers.WriteString(ref position, roomData);
             buffers.WriteBool(ref position, isPublic);
-            buffers.WriteString(ref position, serverData);
-            buffers.WriteBool(ref position, puncher != null && clientIp != null);
-            if (puncher != null && clientIp != null && isPunch)
+            buffers.WriteInt(ref position, maxPlayers);
+            if (isPunch && puncher != null && clientIp != null)
             {
                 buffers.WriteString(ref position, clientIp);
                 puncher.StartServer(isPunch ? punchEndPoint.Port + 1 : -1);
@@ -540,15 +537,15 @@ namespace JFramework.Net
 
             if (isPunch)
             {
-                buffers.WriteBool(ref position, true);
                 buffers.WriteInt(ref position, 0);
             }
             else
             {
-                buffers.WriteBool(ref position, false);
                 buffers.WriteInt(ref position, puncher == null ? 1 : puncher.isPunch ? puncher.transport.port : 1);
             }
 
+            buffers.WriteBool(ref position, isPunch);
+            buffers.WriteBool(ref position, puncher != null && clientIp != null);
             transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
         }
 
@@ -666,15 +663,15 @@ namespace JFramework.Net
         }
     }
 
-    public partial class NetworkRelayTransport
+    public partial class NetworkLobbyTransport
     {
         public void NATServerConnected(int clientId)
         {
             if (isServer)
             {
-                connnections.Add(clientId, memberId);
-                OnServerConnected?.Invoke(memberId);
-                memberId++;
+                connnections.Add(clientId, index);
+                OnServerConnected?.Invoke(index);
+                index++;
             }
         }
 
@@ -723,7 +720,7 @@ namespace JFramework.Net
                 isClient = true;
                 punching = false;
                 buffers.WriteByte(ref position, (byte)OpCodes.JoinRoom);
-                buffers.WriteString(ref position, roomId);
+                buffers.WriteString(ref position, address);
                 buffers.WriteBool(ref position, false);
                 transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
             }
@@ -738,11 +735,11 @@ namespace JFramework.Net
         [Serializable]
         public struct Room
         {
-            public string serverId;
-            public string serverName;
-            public string serverData;
-            public int curPlayers;
-            public int maxPlayers;
+            public string id;
+            public string name;
+            public string data;
+            public int count;
+            public int current;
         }
 
         public enum OpCodes
