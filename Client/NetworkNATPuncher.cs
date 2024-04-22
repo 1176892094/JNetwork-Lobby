@@ -4,15 +4,12 @@ using UnityEngine;
 
 public class NetworkNATPuncher : MonoBehaviour
 {
-    public bool isDebug;
     public Transport transport;
-    private NetworkRelayTransport relay;
-
     public bool isPunch => transport is NetworkTransport;
 
     private void Awake()
     {
-        relay = GetComponent<NetworkRelayTransport>();
+        var lobby = GetComponent<NetworkRelayTransport>();
 
         if (transport == null)
         {
@@ -35,42 +32,34 @@ public class NetworkNATPuncher : MonoBehaviour
 
         void OnServerConnected(int clientId)
         {
-            if (isDebug)
-            {
-                Debug.Log("NAT客户端连接到服务器。");
-            }
-
-            relay.NATServerConnected(clientId);
+            Debug.Log($"NAT客户端{clientId}连接到服务器。");
+            lobby.NATServerConnected(clientId);
         }
 
         void OnServerReceive(int clientId, ArraySegment<byte> data, Channel channel)
         {
-            relay.NATServerReceive(clientId, data, channel);
+            lobby.NATServerReceive(clientId, data, channel);
         }
 
         void OnServerDisconnected(int clientId)
         {
-            relay.NATServerDisconnected(clientId);
+            lobby.NATServerDisconnected(clientId);
         }
 
         void OnClientConnected()
         {
-            if (isDebug)
-            {
-                Debug.Log("NAT客户端连接成功。");
-            }
-
-            relay.NATClientConnected();
+            Debug.Log("NAT客户端连接成功。");
+            lobby.NATClientConnected();
         }
 
         void OnClientDisconnected()
         {
-            relay.NATClientDisconnected();
+            lobby.NATClientDisconnected();
         }
 
         void OnClientReceive(ArraySegment<byte> data, Channel channel)
         {
-            relay.NATClientReceive(data, channel);
+            lobby.NATClientReceive(data, channel);
         }
     }
 
@@ -81,11 +70,7 @@ public class NetworkNATPuncher : MonoBehaviour
             transport.port = (ushort)port;
         }
 
-        if (isDebug)
-        {
-            Debug.Log("创建NAT服务器。");
-        }
-
+        Debug.Log("开启NAT服务器。");
         transport.StartServer();
     }
 
@@ -107,21 +92,13 @@ public class NetworkNATPuncher : MonoBehaviour
 
     public void ServerDisconnect(int clientId)
     {
-        if (isDebug)
-        {
-            Debug.Log($"断开的NAT客户端{clientId}。");
-        }
-
+        Debug.Log($"NAT断开客户端{clientId}");
         transport.ServerDisconnect(clientId);
     }
 
     public void ClientDisconnect()
     {
-        if (isDebug)
-        {
-            Debug.Log("NAT客户端断开连接。");
-        }
-
+        Debug.Log("NAT客户端断开连接。");
         transport.ClientDisconnect();
     }
 

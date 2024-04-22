@@ -7,24 +7,19 @@ namespace JFramework.Net
     public class SocketProxy
     {
         /// <summary>
+        /// 代理是否活跃
+        /// </summary>
+        private bool isActive;
+
+        /// <summary>
         /// 交互时间
         /// </summary>
         public DateTime interactTime;
 
         /// <summary>
-        /// 接收事件
-        /// </summary>
-        public event Action<IPEndPoint, byte[]> OnReceive;
-
-        /// <summary>
-        /// 客户端初始化接收
-        /// </summary>
-        private bool isReceive;
-
-        /// <summary>
         /// Udp客户端
         /// </summary>
-        private readonly UdpClient udpClient;
+        private readonly UdpClient punchClient;
 
         /// <summary>
         /// 远程端口
@@ -34,7 +29,12 @@ namespace JFramework.Net
         /// <summary>
         /// 接收端口
         /// </summary>
-        private IPEndPoint receiveEndPoint = new IPEndPoint(IPAddress.Any, 0);
+        private IPEndPoint clientEndPoint = new IPEndPoint(IPAddress.Any, 0);
+
+        /// <summary>
+        /// 接收事件
+        /// </summary>
+        public event Action<IPEndPoint, byte[]> OnReceive;
 
         /// <summary>
         /// 这是一个构造函数，初始化一个指向特定远程端点的UdpClient。在UdpClient上启动接收并设置最后交互时间。
@@ -43,11 +43,11 @@ namespace JFramework.Net
         /// <param name="endPoint"></param>
         public SocketProxy(int port, IPEndPoint endPoint)
         {
-            udpClient = new UdpClient();
-            udpClient.Connect(new IPEndPoint(IPAddress.Loopback, port));
-            udpClient.BeginReceive(ReceiveData, udpClient);
-            interactTime = DateTime.Now;
+            punchClient = new UdpClient();
+            punchClient.Connect(new IPEndPoint(IPAddress.Loopback, port));
+            punchClient.BeginReceive(ReceiveData, punchClient);
             remoteEndPoint = new IPEndPoint(endPoint.Address, endPoint.Port);
+            interactTime = DateTime.Now;
         }
 
         /// <summary>
@@ -56,8 +56,8 @@ namespace JFramework.Net
         /// <param name="port"></param>
         public SocketProxy(int port)
         {
-            udpClient = new UdpClient(port);
-            udpClient.BeginReceive(ReceiveData, udpClient);
+            punchClient = new UdpClient(port);
+            punchClient.BeginReceive(ReceiveData, punchClient);
             interactTime = DateTime.Now;
         }
 
@@ -66,9 +66,9 @@ namespace JFramework.Net
         /// </summary>
         /// <param name="data"></param>
         /// <param name="length"></param>
-        public void RelayData(byte[] data, int length)
+        public void ServerSend(byte[] data, int length)
         {
-            udpClient.Send(data, length);
+            punchClient.Send(data, length);
             interactTime = DateTime.Now;
         }
 
@@ -77,11 +77,11 @@ namespace JFramework.Net
         /// </summary>
         /// <param name="data"></param>
         /// <param name="length"></param>
-        public void ClientRelayData(byte[] data, int length)
+        public void ClientSend(byte[] data, int length)
         {
-            if (isReceive)
+            if (isActive)
             {
-                udpClient.Send(data, length, receiveEndPoint);
+                punchClient.Send(data, length, clientEndPoint);
                 interactTime = DateTime.Now;
             }
         }
@@ -92,9 +92,9 @@ namespace JFramework.Net
         /// <param name="result"></param>
         private void ReceiveData(IAsyncResult result)
         {
-            var data = udpClient.EndReceive(result, ref receiveEndPoint);
-            udpClient.BeginReceive(ReceiveData, udpClient);
-            isReceive = true;
+            var data = punchClient.EndReceive(result, ref clientEndPoint);
+            punchClient.BeginReceive(ReceiveData, punchClient);
+            isActive = true;
             interactTime = DateTime.Now;
             OnReceive?.Invoke(remoteEndPoint, data);
         }
@@ -104,8 +104,8 @@ namespace JFramework.Net
         /// </summary>
         public void Dispose()
         {
-            udpClient.Dispose();
-            receiveEndPoint = null;
+            punchClient.Dispose();
+            clientEndPoint = null;
             OnReceive = null;
         }
     }
