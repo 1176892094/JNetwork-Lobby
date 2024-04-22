@@ -10,9 +10,9 @@ namespace JFramework.Udp
 
     internal enum State : byte
     {
-        Connected = 0,
-        Authority = 1,
-        Disconnected = 2,
+        Disconnected = 0,
+        Connected = 1,
+        Authority = 2,
     }
 
     public enum Channel : byte

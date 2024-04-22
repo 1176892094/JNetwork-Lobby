@@ -37,7 +37,7 @@ namespace JFramework.Net
         private IPEndPoint clientEndPoint;
         private SocketProxy socketProxy;
         private ConnectState clientState;
-        private NetworkProxyTransport clientProxy;
+        private NetworkMediator mediator;
         private HashMap<int, int> clients = new HashMap<int, int>();
         private HashMap<int, int> connnections = new HashMap<int, int>();
         private readonly HashMap<IPEndPoint, SocketProxy> proxies = new HashMap<IPEndPoint, SocketProxy>();
@@ -54,7 +54,7 @@ namespace JFramework.Net
                 return;
             }
 
-            clientProxy = this.FindComponent<NetworkProxyTransport>();
+            mediator = this.FindComponent<NetworkMediator>();
             if (isPunch && puncher is not NetworkTransport)
             {
                 Debug.Log("请使用 NetworkTransport 进行NAT传输");
@@ -202,7 +202,7 @@ namespace JFramework.Net
             else if (opcode == OpCodes.NATPuncher)
             {
                 var clientIp = GetAddress();
-                if (isPunch && clientProxy != null && clientIp != null)
+                if (isPunch && clientIp != null)
                 {
                     var punchId = data.ReadString(ref position);
                     var punchPort = (ushort)data.ReadInt(ref position);
@@ -269,16 +269,16 @@ namespace JFramework.Net
                     {
                         if (newIp == "127.0.0.1")
                         {
-                            clientProxy.JoinServer("127.0.0.1", newPort + 1);
+                            mediator.JoinServer("127.0.0.1", newPort + 1);
                         }
                         else
                         {
-                            clientProxy.JoinServer("127.0.0.1", punchEndPoint.Port - 1);
+                            mediator.JoinServer("127.0.0.1", punchEndPoint.Port - 1);
                         }
                     }
                     else
                     {
-                        clientProxy.JoinServer(newIp, newPort);
+                        mediator.JoinServer(newIp, newPort);
                     }
                 }
             }
@@ -417,7 +417,7 @@ namespace JFramework.Net
             {
                 address = uri.Host;
             }
-
+            Debug.LogWarning("Connect");
             if (clientState == ConnectState.Disconnected)
             {
                 Debug.Log("没有连接到大厅!");
@@ -435,9 +435,9 @@ namespace JFramework.Net
             punching = false;
             buffers.WriteByte(ref position, (byte)OpCodes.JoinRoom);
             buffers.WriteString(ref position, transport.address);
-            buffers.WriteBool(ref position, clientProxy != null);
+            buffers.WriteBool(ref position, isPunch);
 
-            if (clientProxy == null)
+            if (!isPunch)
             {
                 buffers.WriteString(ref position, "0.0.0.0");
             }
@@ -454,7 +454,7 @@ namespace JFramework.Net
         {
             if (punching)
             {
-                clientProxy.ClientSend(segment, channel);
+                mediator.ClientSend(segment, channel);
             }
             else
             {
@@ -472,11 +472,7 @@ namespace JFramework.Net
             var position = 0;
             buffers.WriteByte(ref position, (byte)OpCodes.LeaveRoom);
             transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
-
-            if (clientProxy != null)
-            {
-                clientProxy.ClientDisconnect();
-            }
+            mediator.ClientDisconnect();
         }
 
         public override void StartServer()
@@ -512,35 +508,27 @@ namespace JFramework.Net
             buffers.WriteString(ref position, roomData);
             buffers.WriteInt(ref position, maxPlayers);
             buffers.WriteBool(ref position, isPublic);
-            if (isPunch && clientProxy != null && clientIp != null)
+            if (isPunch && clientIp != null)
             {
                 buffers.WriteString(ref position, clientIp);
-                clientProxy.StartServer(isPunch ? punchEndPoint.Port + 1 : -1);
+                mediator.StartServer(punchEndPoint.Port + 1);
             }
             else
             {
                 buffers.WriteString(ref position, "0.0.0.0");
             }
 
-            if (isPunch)
-            {
-                buffers.WriteInt(ref position, 0);
-            }
-            else
-            {
-                buffers.WriteInt(ref position, clientProxy == null ? 1 : clientProxy.port);
-            }
-
+            buffers.WriteInt(ref position, isPunch ? 0 : 1);
             buffers.WriteBool(ref position, isPunch);
-            buffers.WriteBool(ref position, clientProxy != null && clientIp != null);
+            buffers.WriteBool(ref position, isPunch && clientIp != null);
             transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
         }
 
         public override void ServerSend(int clientId, ArraySegment<byte> segment, Channel channel = Channel.Reliable)
         {
-            if (clientProxy != null && connnections.TryGetSecond(clientId, out int connection))
+            if (isPunch && connnections.TryGetSecond(clientId, out int connection))
             {
-                clientProxy.ServerSend(connection, segment, channel);
+                mediator.ServerSend(connection, segment, channel);
             }
             else
             {
@@ -565,7 +553,7 @@ namespace JFramework.Net
 
             if (connnections.TryGetSecond(clientId, out int connection))
             {
-                clientProxy.ServerDisconnect(connection);
+                mediator.ServerDisconnect(connection);
             }
         }
 
@@ -588,12 +576,7 @@ namespace JFramework.Net
                 var position = 0;
                 buffers.WriteByte(ref position, (byte)OpCodes.LeaveRoom);
                 transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
-
-                if (clientProxy != null)
-                {
-                    clientProxy.StopServer();
-                }
-
+                mediator.StopServer();
                 var keys = new List<IPEndPoint>(proxies.Keys);
                 foreach (var key in keys)
                 {
@@ -616,37 +599,23 @@ namespace JFramework.Net
         public override void ClientEarlyUpdate()
         {
             transport.ClientEarlyUpdate();
-
-            if (clientProxy != null)
-            {
-                clientProxy.ClientEarlyUpdate();
-            }
+            mediator.ClientEarlyUpdate();
         }
 
         public override void ClientAfterUpdate()
         {
             transport.ClientAfterUpdate();
-
-            if (clientProxy != null)
-            {
-                clientProxy.ClientAfterUpdate();
-            }
+            mediator.ClientAfterUpdate();
         }
 
         public override void ServerEarlyUpdate()
         {
-            if (clientProxy != null)
-            {
-                clientProxy.ServerEarlyUpdate();
-            }
+            mediator.ServerEarlyUpdate();
         }
 
         public override void ServerAfterUpdate()
         {
-            if (clientProxy != null)
-            {
-                clientProxy.ServerAfterUpdate();
-            }
+            mediator.ServerAfterUpdate();
         }
     }
 

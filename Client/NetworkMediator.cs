@@ -2,7 +2,7 @@
 using JFramework;
 using JFramework.Net;
 
-public class NetworkProxyTransport : Component<NetworkLobbyTransport>
+public class NetworkMediator : Component<NetworkLobbyTransport>
 {
     /// <summary>
     /// 使用的传输
@@ -10,28 +10,26 @@ public class NetworkProxyTransport : Component<NetworkLobbyTransport>
     private Transport transport;
 
     /// <summary>
-    /// 使用传输的端口
-    /// </summary>
-    public int port => transport.port;
-
-    /// <summary>
     /// 初始化使用大厅的委托
     /// </summary>
     private void Awake()
     {
         transport = owner.puncher;
-        transport.OnServerConnected -= owner.NATServerConnected;
-        transport.OnServerReceive -= owner.NATServerReceive;
-        transport.OnServerDisconnected -= owner.NATServerDisconnected;
-        transport.OnClientConnected -= owner.NATClientConnected;
-        transport.OnClientReceive -= owner.NATClientReceive;
-        transport.OnClientDisconnected -= owner.NATClientDisconnected;
-        transport.OnServerConnected += owner.NATServerConnected;
-        transport.OnServerReceive += owner.NATServerReceive;
-        transport.OnServerDisconnected += owner.NATServerDisconnected;
-        transport.OnClientConnected += owner.NATClientConnected;
-        transport.OnClientReceive += owner.NATClientReceive;
-        transport.OnClientDisconnected += owner.NATClientDisconnected;
+        if (transport != null)
+        {
+            transport.OnServerConnected -= owner.NATServerConnected;
+            transport.OnServerReceive -= owner.NATServerReceive;
+            transport.OnServerDisconnected -= owner.NATServerDisconnected;
+            transport.OnClientConnected -= owner.NATClientConnected;
+            transport.OnClientReceive -= owner.NATClientReceive;
+            transport.OnClientDisconnected -= owner.NATClientDisconnected;
+            transport.OnServerConnected += owner.NATServerConnected;
+            transport.OnServerReceive += owner.NATServerReceive;
+            transport.OnServerDisconnected += owner.NATServerDisconnected;
+            transport.OnClientConnected += owner.NATClientConnected;
+            transport.OnClientReceive += owner.NATClientReceive;
+            transport.OnClientDisconnected += owner.NATClientDisconnected;
+        }
     }
 
     /// <summary>
@@ -40,12 +38,11 @@ public class NetworkProxyTransport : Component<NetworkLobbyTransport>
     /// <param name="port"></param>
     public void StartServer(int port)
     {
-        if (port > 0)
+        if (transport != null)
         {
             transport.port = (ushort)port;
+            transport.StartServer();
         }
-
-        transport.StartServer();
     }
 
     /// <summary>
@@ -55,13 +52,12 @@ public class NetworkProxyTransport : Component<NetworkLobbyTransport>
     /// <param name="port"></param>
     public void JoinServer(string ip, int port)
     {
-        if (transport is NetworkTransport)
+        if (transport != null)
         {
             transport.address = ip;
             transport.port = (ushort)port;
+            transport.ClientConnect();
         }
-
-        transport.ClientConnect();
     }
 
     /// <summary>
