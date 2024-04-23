@@ -78,12 +78,7 @@ namespace JFramework.Net
             {
                 var data = segment.Array;
                 var position = segment.Offset;
-                var key = data.ReadByte(ref position);
-                var opcode = (OpCodes)key;
-                if (key != byte.MaxValue && key != 7)
-                {
-                    Console.WriteLine(opcode);
-                }
+                var opcode = (OpCodes)data.ReadByte(ref position);
 
                 if (opcode == OpCodes.Authority)
                 {
@@ -128,7 +123,7 @@ namespace JFramework.Net
                     };
                     rooms.Add(room.id, room);
                     clients.Add(clientId, room);
-                    Console.WriteLine($"客户端 {clientId} 创建房间。{room.id} {(connection == null ? "Null" : connection)} {room.address}");
+                    Console.WriteLine($"客户端 {clientId} 创建房间。{room.id} {room.address}:{room.port} {(connection == null ? "Null" : connection)}");
 
                     position = 0;
                     var buffer = buffers.Rent(50);
@@ -155,29 +150,27 @@ namespace JFramework.Net
                             if (connection.Address.Equals(room.proxy.Address))
                             {
                                 buffer.WriteString(ref position, room.address == address ? "127.0.0.1" : room.address);
-                                Console.WriteLine("SendToClient:" + room.address + " " + address + " " + room.address == address
-                                    ? "127.0.0.1" + ":" + room.proxy.Port
-                                    : room.address + ":" + room.proxy.Port);
+                                Console.WriteLine($"客户端 {clientId} 加入房间。" + (room.address == address ? "127.0.0.1" : room.address) + ":" + room.port);
                             }
                             else
                             {
                                 buffer.WriteString(ref position, room.proxy.Address.ToString());
-                                Console.WriteLine("SendToClient:" + room.proxy.Address + ":" + room.proxy.Port);
+                                Console.WriteLine($"客户端 {clientId} 加入房间。" + room.proxy.Address + ":" + room.port);
                             }
 
-                            buffer.WriteInt(ref position, room.isPunch ? room.proxy.Port : room.port);
+                            buffer.WriteInt(ref position, room.port);
                             buffer.WriteBool(ref position, room.isPunch);
                             Program.transport.ServerSend(clientId, new ArraySegment<byte>(buffer, 0, position));
-
-                            if (room.isPunch)
+                         
+                            if (room.isPunch) // 给主机发送连接者的地址
                             {
                                 position = 0;
                                 buffer.WriteByte(ref position, (byte)OpCodes.NATAddress);
                                 buffer.WriteString(ref position, connection.Address.ToString());
                                 buffer.WriteInt(ref position, connection.Port);
                                 buffer.WriteBool(ref position, true);
+                                buffer.WriteInt(ref position, clientId);
                                 Program.transport.ServerSend(room.owner, new ArraySegment<byte>(buffer, 0, position));
-                                Console.WriteLine("SendToHost:" + connection.Address + ":" + connection.Port);
                             }
                         }
                         else

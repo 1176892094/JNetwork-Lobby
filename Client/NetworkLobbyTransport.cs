@@ -29,7 +29,7 @@ namespace JFramework.Net
         private int number;
         private bool isClient;
         private bool isServer;
-        private bool punching;
+        [SerializeField] private bool punching;
         private byte[] buffers;
         private UdpClient punchClient;
         private IPEndPoint punchEndPoint;
@@ -216,7 +216,7 @@ namespace JFramework.Net
                                 punchEndPoint = new IPEndPoint(IPAddress.Parse(clientIp), Random.Range(16000, 17000));
                                 punchClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
                                 punchClient.Client.Bind(punchEndPoint);
-                                Debug.LogWarning(punchEndPoint);
+                                Debug.Log("内网穿透地址：" + punchEndPoint);
                                 break;
                             }
                             catch
@@ -251,12 +251,6 @@ namespace JFramework.Net
                 var punched = data.ReadBool(ref position);
                 clientEndPoint = new IPEndPoint(IPAddress.Parse(newIp), newPort);
 
-                Debug.LogWarning(clientEndPoint);
-                if (isPunch && punched)
-                {
-                    StartCoroutine(NATPunch(clientEndPoint));
-                }
-
                 if (!isServer)
                 {
                     if (socketProxy == null && isPunch && punched)
@@ -267,19 +261,14 @@ namespace JFramework.Net
 
                     if (isPunch && punched)
                     {
-                        if (newIp == "127.0.0.1")
-                        {
-                            mediator.JoinServer("127.0.0.1", newPort + 1);
-                        }
-                        else
-                        {
-                            mediator.JoinServer("127.0.0.1", punchEndPoint.Port - 1);
-                        }
+                        mediator.JoinServer("127.0.0.1", punchEndPoint.Port - 1);
                     }
                     else
                     {
                         mediator.JoinServer(newIp, newPort);
                     }
+
+                    Debug.Log("连接穿透地址 : " + clientEndPoint);
                 }
             }
         }
@@ -303,8 +292,6 @@ namespace JFramework.Net
                     {
                         proxies.Add(endPoint, new SocketProxy(punchEndPoint.Port + 1, endPoint));
                         proxies.GetFirst(endPoint).OnReceive += ServerProcessProxyData;
-                        Debug.LogWarning(endPoint);
-                        Debug.LogWarning(punchEndPoint);
                     }
                 }
 
@@ -327,13 +314,11 @@ namespace JFramework.Net
 
         private void ServerProcessProxyData(IPEndPoint endPoint, byte[] data)
         {
-            Debug.LogWarning("Server:" + endPoint);
             punchClient.Send(data, data.Length, endPoint);
         }
 
         private void ClientProcessProxyData(IPEndPoint entPoint, byte[] data)
         {
-            Debug.LogWarning("Client:" + entPoint);
             punchClient.Send(data, data.Length, clientEndPoint);
         }
 
@@ -379,15 +364,6 @@ namespace JFramework.Net
             }
         }
 
-        private IEnumerator NATPunch(IPEndPoint endPoint)
-        {
-            for (int i = 0; i < 10; i++)
-            {
-                punchClient.Send(new byte[] { 1 }, 1, endPoint);
-                yield return new WaitForSeconds(0.25f);
-            }
-        }
-
         public void UpdateRoom(string serverName, string serverData, bool isPublic, int maxPlayers)
         {
             if (isServer)
@@ -417,7 +393,7 @@ namespace JFramework.Net
             {
                 address = uri.Host;
             }
-            Debug.LogWarning("Connect");
+
             if (clientState == ConnectState.Disconnected)
             {
                 Debug.Log("没有连接到大厅!");
@@ -512,13 +488,14 @@ namespace JFramework.Net
             {
                 buffers.WriteString(ref position, clientIp);
                 mediator.StartServer(punchEndPoint.Port + 1);
+                Debug.Log("内网穿透服务器:" + punchEndPoint.Address + ":" + (punchEndPoint.Port + 1));
             }
             else
             {
                 buffers.WriteString(ref position, "0.0.0.0");
             }
 
-            buffers.WriteInt(ref position, isPunch ? 0 : 1);
+            buffers.WriteInt(ref position, isPunch ? punchEndPoint.Port + 1 : 1);
             buffers.WriteBool(ref position, isPunch);
             buffers.WriteBool(ref position, isPunch && clientIp != null);
             transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
@@ -625,6 +602,7 @@ namespace JFramework.Net
         {
             if (isServer)
             {
+                Debug.Log($"客户端 {clientId} 加入NAT服务器");
                 connnections.Add(clientId, number);
                 OnServerConnected?.Invoke(number);
                 number++;
@@ -641,8 +619,9 @@ namespace JFramework.Net
 
         public void NATServerDisconnected(int clientId)
         {
-            if (!isServer)
+            if (isServer)
             {
+                Debug.Log($"客户端 {clientId} 从NAT服务器断开");
                 OnServerDisconnected?.Invoke(connnections.GetFirst(clientId));
                 connnections.Remove(clientId);
             }
@@ -651,6 +630,7 @@ namespace JFramework.Net
         public void NATClientConnected()
         {
             punching = true;
+            Debug.Log("加入NAT服务器");
             OnClientConnected?.Invoke();
         }
 
@@ -668,6 +648,7 @@ namespace JFramework.Net
             {
                 isClient = false;
                 punching = false;
+                Debug.Log("从NAT服务器断开");
                 OnClientDisconnected?.Invoke();
             }
             else
@@ -678,6 +659,7 @@ namespace JFramework.Net
                 buffers.WriteString(ref position, transport.address);
                 buffers.WriteBool(ref position, false);
                 transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
+                Debug.Log("从NAT服务器断开，切换至中继服务器。");
             }
 
             if (socketProxy != null)

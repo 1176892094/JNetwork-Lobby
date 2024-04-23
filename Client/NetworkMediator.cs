@@ -1,6 +1,7 @@
 ﻿using System;
 using JFramework;
 using JFramework.Net;
+using UnityEngine;
 
 public class NetworkMediator : Component<NetworkLobbyTransport>
 {
@@ -40,6 +41,7 @@ public class NetworkMediator : Component<NetworkLobbyTransport>
     {
         if (transport != null)
         {
+            Debug.Log("开启NAT服务器");
             transport.port = (ushort)port;
             transport.StartServer();
         }
@@ -54,6 +56,7 @@ public class NetworkMediator : Component<NetworkLobbyTransport>
     {
         if (transport != null)
         {
+            Debug.Log("加入NAT服务器");
             transport.address = ip;
             transport.port = (ushort)port;
             transport.ClientConnect();
@@ -67,6 +70,7 @@ public class NetworkMediator : Component<NetworkLobbyTransport>
     {
         if (transport != null)
         {
+            Debug.Log("停止NAT服务器");
             transport.StopServer();
         }
     }
