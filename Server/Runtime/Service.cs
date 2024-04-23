@@ -13,7 +13,6 @@ namespace JFramework.Net
         private readonly ArrayPool<byte> buffers;
         private readonly Random random = new Random();
         private readonly List<int> connections = new List<int>();
-        private const string CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
         public Service(int segmentSize)
         {
@@ -102,9 +101,9 @@ namespace JFramework.Net
                     string id;
                     do
                     {
-                        id = new string(Enumerable.Repeat(CHARS, 5).Select(s => s[random.Next(s.Length)]).ToArray());
+                        id = new string(Enumerable.Repeat("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 5).Select(s => s[random.Next(s.Length)]).ToArray());
                     } while (rooms.ContainsKey(id));
-                    
+
                     var room = new Room
                     {
                         id = id,
@@ -154,7 +153,7 @@ namespace JFramework.Net
                             else
                             {
                                 buffer.WriteString(ref position, room.connection.Address.ToString());
-                                buffer.WriteInt(ref position, room.isPunch ? room.connection.Port : room.port);
+                                buffer.WriteInt(ref position, room.connection.Port);
                                 Debug.Log($"客户端 {clientId} 加入房间。" + room.connection.Address + ":" + room.connection.Port);
                             }
 
@@ -196,8 +195,8 @@ namespace JFramework.Net
                 {
                     if (clients.TryGetValue(clientId, out var room))
                     {
-                        room.name = data.ReadString(ref position) ?? "Room";
-                        room.data = data.ReadString(ref position) ?? "1";
+                        room.name = data.ReadString(ref position);
+                        room.data = data.ReadString(ref position);
                         room.isPublic = data.ReadBool(ref position);
                         room.maxCount = data.ReadInt(ref position);
                     }
