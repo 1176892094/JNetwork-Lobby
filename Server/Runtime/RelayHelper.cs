@@ -136,7 +136,6 @@ namespace JFramework.Net
                 {
                     var id = data.ReadString(ref position);
                     var isPunch = data.ReadBool(ref position);
-                    var address = data.ReadString(ref position);
                     ServerDisconnected(clientId);
                     if (rooms.TryGetValue(id, out var room) && room.players.Count < room.count)
                     {
@@ -144,24 +143,14 @@ namespace JFramework.Net
                         clients.Add(clientId, room);
                         position = 0;
                         var buffer = buffers.Rent(500);
-                        if (isPunch && Program.instance.connections.TryGetValue(clientId, out var connection))
+                        if (isPunch && Program.instance.connections.TryGetValue(clientId, out var connection) && room.punching)
                         {
                             buffer.WriteByte(ref position, (byte)OpCodes.NATAddress);
-                            if (connection.Address.Equals(room.proxy.Address))
-                            {
-                                buffer.WriteString(ref position, room.address == address ? "127.0.0.1" : room.address);
-                                Console.WriteLine($"客户端 {clientId} 加入房间。" + (room.address == address ? "127.0.0.1" : room.address) + ":" + room.port);
-                            }
-                            else
-                            {
-                                buffer.WriteString(ref position, room.proxy.Address.ToString());
-                                Console.WriteLine($"客户端 {clientId} 加入房间。" + room.proxy.Address + ":" + room.port);
-                            }
-
-                            buffer.WriteInt(ref position, room.port);
+                            buffer.WriteString(ref position, room.proxy.Address.ToString());
+                            buffer.WriteInt(ref position, room.isPunch ? room.proxy.Port : room.port);
                             buffer.WriteBool(ref position, room.isPunch);
                             Program.transport.ServerSend(clientId, new ArraySegment<byte>(buffer, 0, position));
-                         
+                            Console.WriteLine($"客户端 {clientId} 加入房间。" + room.proxy.Address + ":" + room.proxy.Port);
                             if (room.isPunch) // 给主机发送连接者的地址
                             {
                                 position = 0;

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading.Tasks;
 using JFramework.Interface;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -251,6 +252,11 @@ namespace JFramework.Net
                 var punched = data.ReadBool(ref position);
                 clientEndPoint = new IPEndPoint(IPAddress.Parse(newIp), newPort);
 
+                if (isPunch && punched)
+                {
+                    NATPunch(clientEndPoint);
+                }
+
                 if (!isServer)
                 {
                     if (socketProxy == null && isPunch && punched)
@@ -259,17 +265,22 @@ namespace JFramework.Net
                         socketProxy.OnReceive += ClientProcessProxyData;
                     }
 
-                    if (isPunch && punched)
-                    {
-                        mediator.JoinServer("127.0.0.1", punchEndPoint.Port - 1);
-                    }
-                    else
-                    {
-                        mediator.JoinServer(newIp, newPort);
-                    }
-
+                    mediator.JoinServer("localhost", punchEndPoint.Port - 1);
                     Debug.Log("连接穿透地址 : " + clientEndPoint);
                 }
+                else
+                {
+                    Debug.Log("连接穿透地址 : " + clientEndPoint);
+                }
+            }
+        }
+
+        private async void NATPunch(IPEndPoint remoteEndPoint)
+        {
+            for (int i = 0; i < 10; i++)
+            {
+                await punchClient.SendAsync(new[] { byte.MaxValue }, 1, remoteEndPoint);
+                await Task.Delay(250);
             }
         }
 
@@ -277,7 +288,7 @@ namespace JFramework.Net
         {
             var endPoint = new IPEndPoint(IPAddress.Any, 0);
             var segment = punchClient.EndReceive(result, ref endPoint);
-            if (!endPoint.Address.Equals(remoteEndPoint.Address))
+            if (!endPoint.Equals(remoteEndPoint))
             {
                 if (isServer)
                 {
@@ -326,7 +337,7 @@ namespace JFramework.Net
         {
             if (clientState != ConnectState.Disconnected)
             {
-                transport.ClientSend(new byte[] { 255 });
+                transport.ClientSend(new[] { byte.MaxValue });
                 punchClient?.Send(new byte[] { 0 }, 1, remoteEndPoint);
                 var keys = new List<IPEndPoint>(proxies.Keys);
                 foreach (var key in keys.Where(ip => DateTime.Now.Subtract(proxies.GetFirst(ip).interactTime).TotalSeconds > 10))
@@ -412,16 +423,6 @@ namespace JFramework.Net
             buffers.WriteByte(ref position, (byte)OpCodes.JoinRoom);
             buffers.WriteString(ref position, transport.address);
             buffers.WriteBool(ref position, isPunch);
-
-            if (!isPunch)
-            {
-                buffers.WriteString(ref position, "0.0.0.0");
-            }
-            else
-            {
-                buffers.WriteString(ref position, GetAddress());
-            }
-
             isClient = true;
             transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
         }
@@ -630,7 +631,6 @@ namespace JFramework.Net
         public void NATClientConnected()
         {
             punching = true;
-            Debug.Log("加入NAT服务器");
             OnClientConnected?.Invoke();
         }
 
