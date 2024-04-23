@@ -14,7 +14,7 @@ namespace JFramework.Net
         /// <summary>
         /// 交互时间
         /// </summary>
-        public DateTime interactTime;
+        private DateTime dateTime;
 
         /// <summary>
         /// Udp客户端
@@ -29,12 +29,17 @@ namespace JFramework.Net
         /// <summary>
         /// 接收端口
         /// </summary>
-        private IPEndPoint clientEndPoint = new IPEndPoint(IPAddress.Any, 0);
+        private IPEndPoint clientEndPoint = new IPEndPoint(IPAddress.IPv6Any, 0);
 
         /// <summary>
         /// 接收事件
         /// </summary>
         public event Action<IPEndPoint, byte[]> OnReceive;
+
+        /// <summary>
+        /// 距离上次交互的时间
+        /// </summary>
+        public double interval => DateTime.Now.Subtract(dateTime).TotalSeconds;
 
         /// <summary>
         /// 这是一个构造函数，初始化一个指向特定远程端点的UdpClient。在UdpClient上启动接收并设置最后交互时间。
@@ -44,10 +49,10 @@ namespace JFramework.Net
         public SocketProxy(int port, IPEndPoint endPoint)
         {
             punchClient = new UdpClient();
-            punchClient.Connect(new IPEndPoint(IPAddress.Loopback, port));
+            punchClient.Connect(new IPEndPoint(IPAddress.IPv6Loopback, port));
             punchClient.BeginReceive(ReceiveData, punchClient);
             remoteEndPoint = new IPEndPoint(endPoint.Address, endPoint.Port);
-            interactTime = DateTime.Now;
+            dateTime = DateTime.Now;
         }
 
         /// <summary>
@@ -58,7 +63,7 @@ namespace JFramework.Net
         {
             punchClient = new UdpClient(port);
             punchClient.BeginReceive(ReceiveData, punchClient);
-            interactTime = DateTime.Now;
+            dateTime = DateTime.Now;
         }
 
         /// <summary>
@@ -69,7 +74,7 @@ namespace JFramework.Net
         public void ServerSend(byte[] data, int length)
         {
             punchClient.Send(data, length);
-            interactTime = DateTime.Now;
+            dateTime = DateTime.Now;
         }
 
         /// <summary>
@@ -82,7 +87,7 @@ namespace JFramework.Net
             if (isActive)
             {
                 punchClient.Send(data, length, clientEndPoint);
-                interactTime = DateTime.Now;
+                dateTime = DateTime.Now;
             }
         }
 
@@ -95,7 +100,7 @@ namespace JFramework.Net
             var data = punchClient.EndReceive(result, ref clientEndPoint);
             punchClient.BeginReceive(ReceiveData, punchClient);
             isActive = true;
-            interactTime = DateTime.Now;
+            dateTime = DateTime.Now;
             OnReceive?.Invoke(remoteEndPoint, data);
         }
 

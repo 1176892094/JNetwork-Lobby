@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -27,16 +26,16 @@ namespace JFramework.Net
         public bool isPublic = true;
         public List<Room> rooms = new List<Room>();
 
-        private int number;
+        private int playerId;
         private bool isClient;
         private bool isServer;
-        [SerializeField] private bool punching;
+        private bool punching;
         private byte[] buffers;
         private UdpClient punchClient;
         private IPEndPoint punchEndPoint;
         private IPEndPoint remoteEndPoint;
         private IPEndPoint clientEndPoint;
-        private SocketProxy socketProxy;
+        private SocketProxy clientProxy;
         private ConnectState clientState;
         private NetworkMediator mediator;
         private HashMap<int, int> clients = new HashMap<int, int>();
@@ -159,9 +158,9 @@ namespace JFramework.Net
 
                 if (isServer)
                 {
-                    clients.Add(clientId, number);
-                    OnServerConnected?.Invoke(number);
-                    number++;
+                    clients.Add(clientId, playerId);
+                    OnServerConnected?.Invoke(playerId);
+                    playerId++;
                 }
             }
             else if (opcode == OpCodes.LeaveRoom)
@@ -250,27 +249,30 @@ namespace JFramework.Net
                 var newIp = data.ReadString(ref position);
                 var newPort = data.ReadInt(ref position);
                 var punched = data.ReadBool(ref position);
+                var isLocal = data.ReadBool(ref position);
                 clientEndPoint = new IPEndPoint(IPAddress.Parse(newIp), newPort);
-
-                if (isPunch && punched)
+                Debug.Log("连接穿透地址 : " + clientEndPoint);
+                if (punched)
                 {
                     NATPunch(clientEndPoint);
                 }
 
                 if (!isServer)
                 {
-                    if (socketProxy == null && isPunch && punched)
+                    if (clientProxy == null && isPunch && punched)
                     {
-                        socketProxy = new SocketProxy(punchEndPoint.Port - 1);
-                        socketProxy.OnReceive += ClientProcessProxyData;
+                        clientProxy = new SocketProxy(punchEndPoint.Port - 1);
+                        clientProxy.OnReceive += ClientProcessProxyData;
                     }
-
-                    mediator.JoinServer("localhost", punchEndPoint.Port - 1);
-                    Debug.Log("连接穿透地址 : " + clientEndPoint);
-                }
-                else
-                {
-                    Debug.Log("连接穿透地址 : " + clientEndPoint);
+                    
+                    if (isLocal)
+                    {
+                        mediator.JoinServer("localhost", punchEndPoint.Port - 1);
+                    }
+                    else
+                    {
+                        mediator.JoinServer(newIp, newPort);
+                    }
                 }
             }
         }
@@ -279,6 +281,7 @@ namespace JFramework.Net
         {
             for (int i = 0; i < 10; i++)
             {
+                Debug.LogWarning("Send");
                 await punchClient.SendAsync(new[] { byte.MaxValue }, 1, remoteEndPoint);
                 await Task.Delay(250);
             }
@@ -308,14 +311,14 @@ namespace JFramework.Net
 
                 if (isClient)
                 {
-                    if (socketProxy == null)
+                    if (clientProxy == null)
                     {
-                        socketProxy = new SocketProxy(punchEndPoint.Port - 1);
-                        socketProxy.OnReceive += ClientProcessProxyData;
+                        clientProxy = new SocketProxy(punchEndPoint.Port - 1);
+                        clientProxy.OnReceive += ClientProcessProxyData;
                     }
                     else
                     {
-                        socketProxy.ClientSend(segment, segment.Length);
+                        clientProxy.ClientSend(segment, segment.Length);
                     }
                 }
             }
@@ -340,7 +343,7 @@ namespace JFramework.Net
                 transport.ClientSend(new[] { byte.MaxValue });
                 punchClient?.Send(new byte[] { 0 }, 1, remoteEndPoint);
                 var keys = new List<IPEndPoint>(proxies.Keys);
-                foreach (var key in keys.Where(ip => DateTime.Now.Subtract(proxies.GetFirst(ip).interactTime).TotalSeconds > 10))
+                foreach (var key in keys.Where(ip => proxies.GetFirst(ip).interval > 10))
                 {
                     proxies.GetFirst(key).Dispose();
                     proxies.Remove(key);
@@ -423,6 +426,7 @@ namespace JFramework.Net
             buffers.WriteByte(ref position, (byte)OpCodes.JoinRoom);
             buffers.WriteString(ref position, transport.address);
             buffers.WriteBool(ref position, isPunch);
+            buffers.WriteString(ref position, isPunch ? GetAddress() : "0.0.0.0");
             isClient = true;
             transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
         }
@@ -466,7 +470,7 @@ namespace JFramework.Net
                 return;
             }
 
-            number = 1;
+            playerId = 1;
             isServer = true;
             clients = new HashMap<int, int>();
             connnections = new HashMap<int, int>();
@@ -604,9 +608,9 @@ namespace JFramework.Net
             if (isServer)
             {
                 Debug.Log($"客户端 {clientId} 加入NAT服务器");
-                connnections.Add(clientId, number);
-                OnServerConnected?.Invoke(number);
-                number++;
+                connnections.Add(clientId, playerId);
+                OnServerConnected?.Invoke(playerId);
+                playerId++;
             }
         }
 
@@ -658,14 +662,15 @@ namespace JFramework.Net
                 buffers.WriteByte(ref position, (byte)OpCodes.JoinRoom);
                 buffers.WriteString(ref position, transport.address);
                 buffers.WriteBool(ref position, false);
+                buffers.WriteString(ref position, "0.0.0.0");
                 transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
                 Debug.Log("从NAT服务器断开，切换至中继服务器。");
             }
 
-            if (socketProxy != null)
+            if (clientProxy != null)
             {
-                socketProxy.Dispose();
-                socketProxy = null;
+                clientProxy.Dispose();
+                clientProxy = null;
             }
         }
 
