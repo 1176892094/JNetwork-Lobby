@@ -23,24 +23,24 @@ namespace JFramework.Net
         public string data;
         
         /// <summary>
-        /// 房间所属人
+        /// 房间拥有者
         /// </summary>
-        public int owner;
+        public int ownerId;
         
         /// <summary>
         /// 房间最大人数
         /// </summary>
-        public int count;
+        public int maxCount;
         
         /// <summary>
         /// 是否显示
         /// </summary>
-        public bool active;
+        public bool isPublic;
         
         /// <summary>
         /// 客户端数量
         /// </summary>
-        public List<int> players;
+        public List<int> clients;
         
         /// <summary>
         /// 占用端口
@@ -63,9 +63,9 @@ namespace JFramework.Net
         [JsonIgnore] public bool punching;
         
         /// <summary>
-        /// 代理端口
+        /// 客户端端口
         /// </summary>
-        [JsonIgnore] public IPEndPoint proxy;
+        [JsonIgnore] public IPEndPoint connection;
     }
 
     /// <summary>

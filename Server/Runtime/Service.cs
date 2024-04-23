@@ -5,20 +5,20 @@ using System.Linq;
 
 namespace JFramework.Net
 {
-    public class RelayHelper
+    public class Service
     {
         public readonly Dictionary<int, Room> clients = new Dictionary<int, Room>();
         public readonly Dictionary<string, Room> rooms = new Dictionary<string, Room>();
-        private readonly int length;
+        private readonly int segmentSize;
         private readonly ArrayPool<byte> buffers;
         private readonly Random random = new Random();
         private readonly List<int> connections = new List<int>();
         private const string CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-        public RelayHelper(int length)
+        public Service(int segmentSize)
         {
-            this.length = length;
-            buffers = ArrayPool<byte>.Create(length, 50);
+            this.segmentSize = segmentSize;
+            buffers = ArrayPool<byte>.Create(segmentSize, 50);
         }
 
         public void ServerConnected(int clientId)
@@ -36,36 +36,36 @@ namespace JFramework.Net
             var copies = rooms.Values.ToList();
             foreach (var room in copies)
             {
-                if (room.owner == clientId)
+                if (room.ownerId == clientId)
                 {
                     var position = 0;
                     var buffer = buffers.Rent(1);
                     buffer.WriteByte(ref position, (byte)OpCodes.LeaveRoom);
-                    foreach (var client in room.players)
+                    foreach (var client in room.clients)
                     {
                         Program.transport.ServerSend(client, new ArraySegment<byte>(buffer, 0, position));
                         clients.Remove(client);
                     }
 
                     buffers.Return(buffer);
-                    room.players.Clear();
+                    room.clients.Clear();
                     rooms.Remove(room.id);
                     clients.Remove(clientId);
                     return;
                 }
 
-                if (owner != -1 && room.owner != owner)
+                if (owner != -1 && room.ownerId != owner)
                 {
                     continue;
                 }
 
-                if (room.players.RemoveAll(client => client == clientId) > 0)
+                if (room.clients.RemoveAll(client => client == clientId) > 0)
                 {
                     var position = 0;
                     var buffer = buffers.Rent(5);
                     buffer.WriteByte(ref position, (byte)OpCodes.Disconnect);
                     buffer.WriteInt(ref position, clientId);
-                    Program.transport.ServerSend(room.owner, new ArraySegment<byte>(buffer, 0, position));
+                    Program.transport.ServerSend(room.ownerId, new ArraySegment<byte>(buffer, 0, position));
                     buffers.Return(buffer);
                     clients.Remove(clientId);
                 }
@@ -84,8 +84,7 @@ namespace JFramework.Net
                 {
                     if (connections.Contains(clientId))
                     {
-                        var secretKey = data.ReadString(ref position);
-                        if (secretKey == Program.setting.ServerKey)
+                        if (data.ReadString(ref position) == Program.setting.ServerKey)
                         {
                             position = 0;
                             var buffer = buffers.Rent(1);
@@ -99,34 +98,33 @@ namespace JFramework.Net
                 else if (opcode == OpCodes.CreateRoom)
                 {
                     ServerDisconnected(clientId);
-                    Program.instance.connections.TryGetValue(clientId, out var connection);
+                    Program.instance.connections.TryGetValue(clientId, out var client);
                     string id;
                     do
                     {
                         id = new string(Enumerable.Repeat(CHARS, 5).Select(s => s[random.Next(s.Length)]).ToArray());
                     } while (rooms.ContainsKey(id));
-
+                    
                     var room = new Room
                     {
                         id = id,
                         name = data.ReadString(ref position),
                         data = data.ReadString(ref position),
-                        owner = clientId,
-                        count = data.ReadInt(ref position),
-                        active = data.ReadBool(ref position),
-                        players = new List<int>(),
+                        ownerId = clientId,
+                        maxCount = data.ReadInt(ref position),
+                        isPublic = data.ReadBool(ref position),
+                        clients = new List<int>(),
                         address = data.ReadString(ref position),
                         port = data.ReadInt(ref position),
                         isPunch = data.ReadBool(ref position),
-                        punching = connection != null && data.ReadBool(ref position),
-                        proxy = connection,
+                        punching = client != null && data.ReadBool(ref position),
+                        connection = client,
                     };
                     rooms.Add(room.id, room);
                     clients.Add(clientId, room);
-                    Console.WriteLine($"客户端 {clientId} 创建房间。{room.id} {room.address}:{room.port} {(connection == null ? "Null" : connection)}");
-
+                    Debug.Log($"客户端 {clientId} 创建房间。 {room.address}:{room.port} {(client == null ? "Null" : client)}");
                     position = 0;
-                    var buffer = buffers.Rent(50);
+                    var buffer = buffers.Rent(100);
                     buffer.WriteByte(ref position, (byte)OpCodes.CreateRoom);
                     buffer.WriteString(ref position, room.id);
                     Program.transport.ServerSend(clientId, new ArraySegment<byte>(buffer, 0, position));
@@ -136,21 +134,34 @@ namespace JFramework.Net
                 {
                     var id = data.ReadString(ref position);
                     var isPunch = data.ReadBool(ref position);
+                    var address = data.ReadString(ref position);
                     ServerDisconnected(clientId);
-                    if (rooms.TryGetValue(id, out var room) && room.players.Count < room.count)
+                    if (rooms.TryGetValue(id, out var room) && room.clients.Count < room.maxCount)
                     {
-                        room.players.Add(clientId);
+                        room.clients.Add(clientId);
                         clients.Add(clientId, room);
                         position = 0;
                         var buffer = buffers.Rent(500);
                         if (isPunch && Program.instance.connections.TryGetValue(clientId, out var connection) && room.punching)
                         {
                             buffer.WriteByte(ref position, (byte)OpCodes.NATAddress);
-                            buffer.WriteString(ref position, room.proxy.Address.ToString());
-                            buffer.WriteInt(ref position, room.isPunch ? room.proxy.Port : room.port);
+                            if (connection.Address.Equals(room.connection.Address) && room.address == address)
+                            {
+                                buffer.WriteString(ref position, room.address);
+                                buffer.WriteInt(ref position, room.port);
+                                Debug.Log($"客户端 {clientId} 加入房间。" + room.address + ":" + room.port);
+                            }
+                            else
+                            {
+                                buffer.WriteString(ref position, room.connection.Address.ToString());
+                                buffer.WriteInt(ref position, room.isPunch ? room.connection.Port : room.port);
+                                Debug.Log($"客户端 {clientId} 加入房间。" + room.connection.Address + ":" + room.connection.Port);
+                            }
+
                             buffer.WriteBool(ref position, room.isPunch);
+                            buffer.WriteBool(ref position, connection.Address.Equals(room.connection.Address));
                             Program.transport.ServerSend(clientId, new ArraySegment<byte>(buffer, 0, position));
-                            Console.WriteLine($"客户端 {clientId} 加入房间。" + room.proxy.Address + ":" + room.proxy.Port);
+
                             if (room.isPunch) // 给主机发送连接者的地址
                             {
                                 position = 0;
@@ -159,7 +170,7 @@ namespace JFramework.Net
                                 buffer.WriteInt(ref position, connection.Port);
                                 buffer.WriteBool(ref position, true);
                                 buffer.WriteInt(ref position, clientId);
-                                Program.transport.ServerSend(room.owner, new ArraySegment<byte>(buffer, 0, position));
+                                Program.transport.ServerSend(room.ownerId, new ArraySegment<byte>(buffer, 0, position));
                             }
                         }
                         else
@@ -167,7 +178,7 @@ namespace JFramework.Net
                             buffer.WriteByte(ref position, (byte)OpCodes.JoinRoom);
                             buffer.WriteInt(ref position, clientId);
                             Program.transport.ServerSend(clientId, new ArraySegment<byte>(buffer, 0, position));
-                            Program.transport.ServerSend(room.owner, new ArraySegment<byte>(buffer, 0, position));
+                            Program.transport.ServerSend(room.ownerId, new ArraySegment<byte>(buffer, 0, position));
                         }
 
                         buffers.Return(buffer);
@@ -187,8 +198,8 @@ namespace JFramework.Net
                     {
                         room.name = data.ReadString(ref position) ?? "Room";
                         room.data = data.ReadString(ref position) ?? "1";
-                        room.active = data.ReadBool(ref position);
-                        room.count = data.ReadInt(ref position);
+                        room.isPublic = data.ReadBool(ref position);
+                        room.maxCount = data.ReadInt(ref position);
                     }
                 }
                 else if (opcode == OpCodes.LeaveRoom)
@@ -201,12 +212,12 @@ namespace JFramework.Net
                     var targetId = data.ReadInt(ref position);
                     if (clients.TryGetValue(clientId, out var room) && room != null)
                     {
-                        if (room.owner == clientId)
+                        if (room.ownerId == clientId)
                         {
-                            if (room.players.Contains(targetId))
+                            if (room.clients.Contains(targetId))
                             {
                                 position = 0;
-                                var buffer = buffers.Rent(length);
+                                var buffer = buffers.Rent(segmentSize);
                                 buffer.WriteByte(ref position, (byte)OpCodes.UpdateData);
                                 buffer.WriteBytes(ref position, newData);
                                 Program.transport.ServerSend(targetId, new ArraySegment<byte>(buffer, 0, position), channel);
@@ -216,11 +227,11 @@ namespace JFramework.Net
                         else
                         {
                             position = 0;
-                            var buffer = buffers.Rent(length);
+                            var buffer = buffers.Rent(segmentSize);
                             buffer.WriteByte(ref position, (byte)OpCodes.UpdateData);
                             buffer.WriteBytes(ref position, newData);
                             buffer.WriteInt(ref position, clientId);
-                            Program.transport.ServerSend(room.owner, new ArraySegment<byte>(buffer, 0, position), channel);
+                            Program.transport.ServerSend(room.ownerId, new ArraySegment<byte>(buffer, 0, position), channel);
                             buffers.Return(buffer);
                         }
                     }
@@ -232,7 +243,8 @@ namespace JFramework.Net
             }
             catch (Exception e)
             {
-                Console.WriteLine(e);
+                Debug.Log(e.ToString(), ConsoleColor.Red);
+                Program.transport.ServerDisconnect(clientId);
             }
         }
     }
