@@ -312,7 +312,7 @@ namespace JFramework.Net
                 var punched = data.ReadBool(ref position);
                 remoteEndPoint = new IPEndPoint(IPAddress.Parse(newIp), newPort);
 
-                Debug.Log("连接穿透地址 : " + remoteEndPoint + " " + punched);
+                Debug.Log("连接穿透地址 : " + remoteEndPoint);
                 if (punched)
                 {
                     NATPunch(remoteEndPoint);
