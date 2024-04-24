@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Threading.Tasks;
 using JFramework.Interface;
@@ -46,21 +47,67 @@ namespace JFramework.Net
         public event Action OnDisconnect;
         public bool isPunch => puncher != null;
 
-        public static string currentIp => Dns.GetHostEntry(Dns.GetHostName()).AddressList
-            .FirstOrDefault(ip => ip.AddressFamily == AddressFamily.InterNetwork)?.ToString() ?? "127.0.0.1";
+        public string currentIp
+        {
+            get
+            {
+                try
+                {
+                    var interfaces = NetworkInterface.GetAllNetworkInterfaces();
+                    foreach (var inter in interfaces)
+                    {
+                        if (inter.OperationalStatus == OperationalStatus.Up && inter.NetworkInterfaceType != NetworkInterfaceType.Loopback)
+                        {
+                            var properties = inter.GetIPProperties();
+                            var ip = properties.UnicastAddresses.FirstOrDefault(ip => ip.Address.AddressFamily == AddressFamily.InterNetwork);
+                            if (ip != null)
+                            {
+                                return ip.Address.ToString();
+                            }
+                        }
+                    }
+                    
+                    // 虚拟机无法解析网络接口 因此额外解析主机地址
+                    var addresses = Dns.GetHostEntry(Dns.GetHostName()).AddressList;
+                    foreach (var ip in addresses)
+                    {
+                        if (ip.AddressFamily == AddressFamily.InterNetwork)
+                        {
+                            return ip.ToString();
+                        }
+                    }
+
+                    return "127.0.0.1";
+                }
+                catch
+                {
+                    return "127.0.0.1";
+                }
+            }
+        }
 
         private void Awake()
         {
             if (transport is NetworkLobbyTransport)
             {
-                Debug.Log("请使用 NetworkTransport 进行传输");
+                Debug.LogWarning("请使用 NetworkTransport 进行传输！");
                 return;
             }
 
             mediator = this.FindComponent<NetworkMediator>();
-            if (isPunch && puncher is not NetworkTransport)
+            if (isPunch)
             {
-                Debug.Log("请使用 NetworkTransport 进行NAT传输");
+                if (puncher is not NetworkTransport)
+                {
+                    Debug.LogWarning("请使用 NetworkTransport 进行NAT传输！");
+                    return;
+                }
+
+                if (puncher == transport)
+                {
+                    Debug.LogWarning("中继传输 和 NAT传输 不能相同！");
+                    return;
+                }
             }
 
             transport.OnClientConnected -= OnClientConnected;
@@ -199,7 +246,7 @@ namespace JFramework.Net
             {
                 if (!isPunch) return;
                 var punchId = data.ReadString(ref position);
-                var punchPort = (ushort)data.ReadInt(ref position);
+                var punchPort = data.ReadInt(ref position);
                 if (punchClient == null)
                 {
                     punchClient = new UdpClient { ExclusiveAddressUse = false };
