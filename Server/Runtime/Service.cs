@@ -117,11 +117,11 @@ namespace JFramework.Net
                         port = data.ReadInt(ref position),
                         isPunch = data.ReadBool(ref position),
                         punching = client != null && data.ReadBool(ref position),
-                        connection = client,
+                        owner = client,
                     };
                     rooms.Add(room.id, room);
                     clients.Add(clientId, room);
-                    Debug.Log($"客户端 {clientId} 创建房间。 {room.address}:{room.port} {(client == null ? "Null" : client)}");
+                    Debug.Log($"客户端 {clientId} 创建游戏房间。{(client == null ? "Null" : client)} {room.address}:{room.port}");
                     position = 0;
                     var buffer = buffers.Rent(100);
                     buffer.WriteByte(ref position, (byte)OpCodes.CreateRoom);
@@ -131,11 +131,10 @@ namespace JFramework.Net
                 }
                 else if (opcode == OpCodes.JoinRoom)
                 {
-                    var id = data.ReadString(ref position);
+                    var ownerId = data.ReadString(ref position);
                     var isPunch = data.ReadBool(ref position);
-                    var address = data.ReadString(ref position);
                     ServerDisconnected(clientId);
-                    if (rooms.TryGetValue(id, out var room) && room.clients.Count < room.maxCount)
+                    if (rooms.TryGetValue(ownerId, out var room) && room.clients.Count < room.maxCount)
                     {
                         room.clients.Add(clientId);
                         clients.Add(clientId, room);
@@ -144,21 +143,10 @@ namespace JFramework.Net
                         if (isPunch && Program.instance.connections.TryGetValue(clientId, out var connection) && room.punching)
                         {
                             buffer.WriteByte(ref position, (byte)OpCodes.NATAddress);
-                            if (connection.Address.Equals(room.connection.Address) && room.address == address)
-                            {
-                                buffer.WriteString(ref position, room.address);
-                                buffer.WriteInt(ref position, room.port);
-                                Debug.Log($"客户端 {clientId} 加入房间。" + room.address + ":" + room.port);
-                            }
-                            else
-                            {
-                                buffer.WriteString(ref position, room.connection.Address.ToString());
-                                buffer.WriteInt(ref position, room.connection.Port);
-                                Debug.Log($"客户端 {clientId} 加入房间。" + room.connection.Address + ":" + room.connection.Port);
-                            }
-
+                            buffer.WriteString(ref position, room.owner.Address.ToString());
+                            buffer.WriteInt(ref position, room.owner.Port);
+                            Debug.Log($"客户端 {clientId} 加入游戏房间。{connection} {room.owner.Address}:{room.owner.Port}");
                             buffer.WriteBool(ref position, room.isPunch);
-                            buffer.WriteBool(ref position, connection.Address.Equals(room.connection.Address));
                             Program.transport.ServerSend(clientId, new ArraySegment<byte>(buffer, 0, position));
 
                             if (room.isPunch) // 给主机发送连接者的地址

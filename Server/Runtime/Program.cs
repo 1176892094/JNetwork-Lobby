@@ -82,7 +82,6 @@ namespace JFramework.Net
                 {
                     clients.Add(clientId);
                     service.ServerConnected(clientId);
-                    Debug.Log($"客户端 {clientId} 连接到传输。", ConsoleColor.Cyan);
                     if (setting.UseNATPuncher)
                     {
                         var punchId = Guid.NewGuid().ToString();
@@ -134,9 +133,8 @@ namespace JFramework.Net
                     try
                     {
                         punchClient = new UdpClient(setting.NATPunchPort);
-                        Debug.Log("OK", ConsoleColor.Green);
-                        Debug.Log("开启内网穿透线程...", ConsoleColor.White, true);
                         var thread = new Thread(NATPuncherThread);
+                        Debug.Log("OK", ConsoleColor.Green);
                         try
                         {
                             thread.Start();
@@ -182,7 +180,6 @@ namespace JFramework.Net
         private void NATPuncherThread()
         {
             var endPoint = new IPEndPoint(IPAddress.Any, setting.NATPunchPort);
-            Debug.Log("OK", ConsoleColor.Green);
             while (true)
             {
                 var segment = punchClient.Receive(ref endPoint);
@@ -194,13 +191,13 @@ namespace JFramework.Net
                         var clientId = segment.ReadString(ref position);
                         if (punches.TryGetSecond(clientId, out position))
                         {
-                            Debug.Log($"客户端 {position} 建立内网穿透连接 " + endPoint);
                             connections.Add(position, new IPEndPoint(endPoint.Address, endPoint.Port));
+                            Debug.Log($"客户端 {position} 建立端口映射。" + endPoint);
                             punches.Remove(position);
                         }
                     }
 
-                    punchClient.Send(new byte[] { 1 }, 1, endPoint);
+                    punchClient.Send(new byte[] { 0 }, 1, endPoint);
                 }
                 catch (Exception e)
                 {

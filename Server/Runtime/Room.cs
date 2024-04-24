@@ -65,7 +65,7 @@ namespace JFramework.Net
         /// <summary>
         /// 客户端端口
         /// </summary>
-        [JsonIgnore] public IPEndPoint connection;
+        [JsonIgnore] public IPEndPoint owner;
     }
 
     /// <summary>
