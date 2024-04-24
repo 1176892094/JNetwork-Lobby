@@ -59,14 +59,15 @@ namespace JFramework.Net
                         if (inter.OperationalStatus == OperationalStatus.Up && inter.NetworkInterfaceType != NetworkInterfaceType.Loopback)
                         {
                             var properties = inter.GetIPProperties();
-                            var ip = properties.UnicastAddresses.FirstOrDefault(ip => ip.Address.AddressFamily == AddressFamily.InterNetwork);
+                            var ip = properties.UnicastAddresses.FirstOrDefault(
+                                ip => ip.Address.AddressFamily == AddressFamily.InterNetwork);
                             if (ip != null)
                             {
                                 return ip.Address.ToString();
                             }
                         }
                     }
-                    
+
                     // 虚拟机无法解析网络接口 因此额外解析主机地址
                     var addresses = Dns.GetHostEntry(Dns.GetHostName()).AddressList;
                     foreach (var ip in addresses)
@@ -171,6 +172,22 @@ namespace JFramework.Net
         {
             if (clientState != ConnectState.Disconnected)
             {
+                if (isPunch)
+                {
+                    mediator.StopServer();
+                    punchClient?.Dispose();
+                    punchClient = null;
+                    punching = false;
+                    clientProxy?.Dispose();
+                    clientProxy = null;
+                }
+
+                isServer = false;
+                isClient = false;
+                clients.Clear();
+                connnections.Clear();
+                proxies.Clear();
+                clientState = ConnectState.Disconnected;
                 transport.ClientDisconnect();
             }
         }
@@ -195,7 +212,6 @@ namespace JFramework.Net
             else if (opcode == OpCodes.CreateRoom)
             {
                 serverId = data.ReadString(ref position);
-                UpdateRoom();
             }
             else if (opcode == OpCodes.JoinRoom)
             {
