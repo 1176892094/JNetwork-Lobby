@@ -150,10 +150,7 @@ namespace JFramework.Net
 
         private void OnDestroy()
         {
-            if (clientState != ConnectState.Disconnected)
-            {
-                transport.ClientDisconnect();
-            }
+            DisconnectToLobby();
         }
 
         public void ConnectToLobby()
@@ -168,6 +165,14 @@ namespace JFramework.Net
             transport.address = address;
             buffers = new byte[transport.GetMaxPacketSize()];
             transport.ClientConnect();
+        }
+
+        public void DisconnectToLobby()
+        {
+            if (clientState != ConnectState.Disconnected)
+            {
+                transport.ClientDisconnect();
+            }
         }
 
         private void ClientReceive(ArraySegment<byte> segment, Channel channel)
