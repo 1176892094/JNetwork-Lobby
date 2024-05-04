@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Threading.Tasks;
+using JFramework.Core;
 using JFramework.Interface;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -421,7 +422,7 @@ namespace JFramework.Net
 
                 var json = "{" + "\"value\":" + request.downloadHandler.text.Decompress() + "}";
                 Debug.Log("房间信息：" + json);
-                rooms = JsonUtility.FromJson<Variables<Room>>(json).value;
+                rooms = JsonManager.Reader<List<Room>>(json);
                 OnRoomUpdate?.Invoke();
             }
             else
@@ -725,6 +726,7 @@ namespace JFramework.Net
             public string id;
             public string name;
             public string data;
+            public bool isPublic;
             public int maxCount;
             public List<int> clients;
         }
