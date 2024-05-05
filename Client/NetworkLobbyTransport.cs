@@ -171,26 +171,29 @@ namespace JFramework.Net
 
         public void DisconnectToLobby()
         {
-            if (clientState != ConnectState.Disconnected)
+            if (clientState == ConnectState.Disconnected)
             {
-                if (isPunch)
-                {
-                    mediator.StopServer();
-                    punchClient?.Dispose();
-                    punchClient = null;
-                    punching = false;
-                    clientProxy?.Dispose();
-                    clientProxy = null;
-                }
-
-                isServer = false;
-                isClient = false;
-                clients.Clear();
-                connnections.Clear();
-                proxies.Clear();
-                clientState = ConnectState.Disconnected;
-                transport.ClientDisconnect();
+                Debug.Log("大厅服务器已停止!");
+                return;
             }
+            
+            if (isPunch)
+            {
+                mediator.StopServer();
+                punchClient?.Dispose();
+                punchClient = null;
+                punching = false;
+                clientProxy?.Dispose();
+                clientProxy = null;
+            }
+
+            isServer = false;
+            isClient = false;
+            clients.Clear();
+            connnections.Clear();
+            proxies.Clear();
+            clientState = ConnectState.Disconnected;
+            transport.ClientDisconnect();
         }
 
         private void ClientReceive(ArraySegment<byte> segment, Channel channel)
