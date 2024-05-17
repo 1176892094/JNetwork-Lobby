@@ -19,7 +19,7 @@ namespace JFramework.Net
         public Transport transport;
         public Transport puncher;
         public bool isAwake = true;
-        public float heratBeat = 3;
+        public float heartBeat = 3;
         public string serverId;
         public string serverKey = "Secret Key";
         public string roomName = "Game Room";
@@ -41,7 +41,7 @@ namespace JFramework.Net
         private ConnectState clientState;
         private NetworkMediator mediator;
         private readonly HashMap<int, int> clients = new HashMap<int, int>();
-        private readonly HashMap<int, int> connnections = new HashMap<int, int>();
+        private readonly HashMap<int, int> connections = new HashMap<int, int>();
         private readonly HashMap<IPEndPoint, SocketProxy> proxies = new HashMap<IPEndPoint, SocketProxy>();
 
         public event Action OnRoomUpdate;
@@ -124,7 +124,7 @@ namespace JFramework.Net
                 ConnectToLobby();
             }
 
-            InvokeRepeating(nameof(HeartBeat), heratBeat, heratBeat);
+            InvokeRepeating(nameof(HeartBeat), heartBeat, heartBeat);
 
             void OnClientConnected()
             {
@@ -190,7 +190,7 @@ namespace JFramework.Net
             isServer = false;
             isClient = false;
             clients.Clear();
-            connnections.Clear();
+            connections.Clear();
             proxies.Clear();
             clientState = ConnectState.Disconnected;
             transport.ClientDisconnect();
@@ -326,7 +326,7 @@ namespace JFramework.Net
                 {
                     if (clientProxy == null && isPunch && punched)
                     {
-                        clientProxy = new SocketProxy(punchEndPoint.Port - 1, ClentSend);
+                        clientProxy = new SocketProxy(punchEndPoint.Port - 1, ClientSend);
                     }
 
                     mediator.JoinServer("127.0.0.1", punchEndPoint.Port - 1);
@@ -377,7 +377,7 @@ namespace JFramework.Net
                     }
                     else
                     {
-                        clientProxy = new SocketProxy(punchEndPoint.Port - 1, ClentSend);
+                        clientProxy = new SocketProxy(punchEndPoint.Port - 1, ClientSend);
                     }
                 }
             }
@@ -390,7 +390,7 @@ namespace JFramework.Net
             punchClient.Send(data, data.Length, endPoint);
         }
 
-        private void ClentSend(byte[] data)
+        private void ClientSend(byte[] data)
         {
             punchClient.Send(data, data.Length, remoteEndPoint);
         }
@@ -522,7 +522,7 @@ namespace JFramework.Net
             playerId = 1;
             isServer = true;
             clients.Clear();
-            connnections.Clear();
+            connections.Clear();
 
             var keys = proxies.Keys.ToList();
             foreach (var key in keys)
@@ -558,7 +558,7 @@ namespace JFramework.Net
 
         public override void ServerSend(int clientId, ArraySegment<byte> segment, Channel channel = Channel.Reliable)
         {
-            if (isPunch && connnections.TryGetSecond(clientId, out int connection))
+            if (isPunch && connections.TryGetSecond(clientId, out int connection))
             {
                 mediator.ServerSend(connection, segment, channel);
             }
@@ -583,7 +583,7 @@ namespace JFramework.Net
                 return;
             }
 
-            if (connnections.TryGetSecond(clientId, out int connection))
+            if (connections.TryGetSecond(clientId, out int connection))
             {
                 mediator.ServerDisconnect(connection);
             }
@@ -658,7 +658,7 @@ namespace JFramework.Net
             if (isServer)
             {
                 Debug.Log($"客户端 {clientId} 加入NAT服务器");
-                connnections.Add(clientId, playerId);
+                connections.Add(clientId, playerId);
                 OnServerConnected?.Invoke(playerId);
                 playerId++;
             }
@@ -668,7 +668,7 @@ namespace JFramework.Net
         {
             if (isServer)
             {
-                OnServerReceive?.Invoke(connnections.GetFirst(clientId), segment, channel);
+                OnServerReceive?.Invoke(connections.GetFirst(clientId), segment, channel);
             }
         }
 
@@ -677,8 +677,8 @@ namespace JFramework.Net
             if (isServer)
             {
                 Debug.Log($"客户端 {clientId} 从NAT服务器断开");
-                OnServerDisconnected?.Invoke(connnections.GetFirst(clientId));
-                connnections.Remove(clientId);
+                OnServerDisconnected?.Invoke(connections.GetFirst(clientId));
+                connections.Remove(clientId);
             }
         }
 
