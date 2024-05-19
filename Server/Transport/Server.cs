@@ -159,7 +159,7 @@ namespace JFramework.Udp
             void OnAuthority()
             {
                 client.proxy.Handshake();
-                Log.Info($"客户端 {clientId} 连接到服务器。");
+                Log.Info($"[{DateTime.Now:MM-dd HH:mm:ss}] 客户端 {clientId} 连接到服务器。");
                 clients.Add(clientId, client);
                 OnConnected?.Invoke(clientId);
             }
@@ -167,7 +167,7 @@ namespace JFramework.Udp
             void OnDisconnected()
             {
                 copies.Add(clientId);
-                Log.Info($"客户端 {clientId} 从服务器断开。");
+                Log.Info($"[{DateTime.Now:MM-dd HH:mm:ss}] 客户端 {clientId} 从服务器断开。");
                 this.OnDisconnected?.Invoke(clientId);
             }
 

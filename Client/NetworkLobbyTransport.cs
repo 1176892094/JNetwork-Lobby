@@ -173,7 +173,6 @@ namespace JFramework.Net
         {
             if (clientState == ConnectState.Disconnected)
             {
-                Debug.Log("大厅服务器已停止!");
                 return;
             }
             

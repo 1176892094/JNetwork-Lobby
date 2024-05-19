@@ -39,7 +39,7 @@ namespace JFramework.Net
         public async Task MainAsync()
         {
             instance = this;
-            Debug.Log("启动中继服务器!", ConsoleColor.Green);
+            Debug.Log($"启动中继服务器!");
             if (!File.Exists(SETTING))
             {
                 await File.WriteAllTextAsync(SETTING, JsonConvert.SerializeObject(new Setting(), Formatting.Indented));
@@ -50,12 +50,11 @@ namespace JFramework.Net
             }
 
             setting = JsonConvert.DeserializeObject<Setting>(await File.ReadAllTextAsync(SETTING));
-            Debug.Log("加载程序集...", ConsoleColor.White, true);
+            Debug.Log("加载程序集...");
             try
             {
                 var assembly = Assembly.LoadFile(Path.GetFullPath(setting.Assembly));
-                Debug.Log("OK", ConsoleColor.Green);
-                Debug.Log("加载传输类...", ConsoleColor.White, true);
+                Debug.Log("加载传输类...");
                 transport = assembly.CreateInstance(setting.Transport) as Transport;
                 if (transport == null)
                 {
@@ -66,17 +65,15 @@ namespace JFramework.Net
                 }
 
                 var type = assembly.GetType(setting.Transport);
-                Debug.Log("OK", ConsoleColor.Green);
-                Debug.Log("加载传输方法...", ConsoleColor.White, true);
+                Debug.Log("加载传输方法...");
                 if (type != null)
                 {
                     awakeMethod = type.GetMethod("Awake", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                     updateMethod = type.GetMethod("Update", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                 }
 
-                Debug.Log("OK", ConsoleColor.Green);
                 awakeMethod?.Invoke(transport, null);
-                Debug.Log("开始进行传输...", ConsoleColor.White, true);
+                Debug.Log("开始进行传输...");
                 service = new Service(transport.GetMaxPacketSize());
                 transport.OnServerConnected = clientId =>
                 {
@@ -112,16 +109,11 @@ namespace JFramework.Net
 
                 transport.port = setting.EndPointPort;
                 transport.StartServer();
-                Debug.Log("OK", ConsoleColor.Green);
 
                 if (setting.UseEndPoint)
                 {
-                    Debug.Log("开启REST服务...", ConsoleColor.White, true);
-                    if (RestUtility.StartServer(setting.EndPointPort))
-                    {
-                        Debug.Log("OK", ConsoleColor.Green);
-                    }
-                    else
+                    Debug.Log("开启REST服务...");
+                    if (!RestUtility.StartServer(setting.EndPointPort))
                     {
                         Debug.Log("请以管理员身份运行或检查端口是否被占用。", ConsoleColor.Red);
                     }
@@ -129,12 +121,11 @@ namespace JFramework.Net
 
                 if (setting.UseNATPuncher)
                 {
-                    Debug.Log("开启NATP服务...", ConsoleColor.White, true);
+                    Debug.Log("开启NATP服务...");
                     try
                     {
                         punchClient = new UdpClient(setting.NATPunchPort);
                         var thread = new Thread(NATPuncherThread);
-                        Debug.Log("OK", ConsoleColor.Green);
                         try
                         {
                             thread.Start();
@@ -209,17 +200,10 @@ namespace JFramework.Net
 
     public static class Debug
     {
-        public static void Log(string message, ConsoleColor color = ConsoleColor.White, bool nowrap = false)
+        public static void Log(string message, ConsoleColor color = ConsoleColor.White)
         {
             Console.ForegroundColor = color;
-            if (nowrap)
-            {
-                Console.Write(message);
-            }
-            else
-            {
-                Console.WriteLine(message);
-            }
+            Console.WriteLine($"[{DateTime.Now:MM-dd HH:mm:ss}] " + message);
         }
     }
 
@@ -231,7 +215,7 @@ namespace JFramework.Net
             {
                 var builder = new ConfigurationBuilder();
                 var config = builder.SetBasePath(Directory.GetCurrentDirectory()).AddJsonFile("appsettings.json", true, true).Build();
-                var server = new RestServerBuilder(new ServiceCollection(), config, ConfigureSerivces, ConfigureServer).Build();
+                var server = new RestServerBuilder(new ServiceCollection(), config, ConfigureServices, ConfigureServer).Build();
                 server.Router.Options.SendExceptionMessages = false;
                 server.Start();
                 return true;
@@ -241,7 +225,7 @@ namespace JFramework.Net
                 return false;
             }
 
-            void ConfigureSerivces(IServiceCollection services)
+            void ConfigureServices(IServiceCollection services)
             {
                 services.AddLogging(builder => builder.AddConsole());
                 services.Configure<LoggerFilterOptions>(options => options.MinLevel = LogLevel.None);
