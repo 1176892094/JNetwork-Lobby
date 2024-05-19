@@ -60,8 +60,7 @@ namespace JFramework.Net
                         if (inter.OperationalStatus == OperationalStatus.Up && inter.NetworkInterfaceType != NetworkInterfaceType.Loopback)
                         {
                             var properties = inter.GetIPProperties();
-                            var ip = properties.UnicastAddresses.FirstOrDefault(
-                                ip => ip.Address.AddressFamily == AddressFamily.InterNetwork);
+                            var ip = properties.UnicastAddresses.FirstOrDefault(ip => ip.Address.AddressFamily == AddressFamily.InterNetwork);
                             if (ip != null)
                             {
                                 return ip.Address.ToString();
@@ -337,8 +336,11 @@ namespace JFramework.Net
         {
             for (int i = 0; i < 10; i++)
             {
-                await punchClient.SendAsync(new[] { byte.MaxValue }, 1, remoteEndPoint);
-                await Task.Delay(250);
+                if (punchClient != null)
+                {
+                    await punchClient.SendAsync(new[] { byte.MaxValue }, 1, remoteEndPoint);
+                    await Task.Delay(250);
+                }
             }
         }
 
