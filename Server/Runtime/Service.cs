@@ -134,7 +134,7 @@ namespace JFramework.Net
                     var ownerId = data.ReadString(ref position);
                     var isPunch = data.ReadBool(ref position);
                     ServerDisconnected(clientId);
-                    if (rooms.TryGetValue(ownerId, out var room) && room.clients.Count < room.maxCount)
+                    if (rooms.TryGetValue(ownerId, out var room) && room.clients.Count + 1 < room.maxCount)
                     {
                         room.clients.Add(clientId);
                         clients.Add(clientId, room);
