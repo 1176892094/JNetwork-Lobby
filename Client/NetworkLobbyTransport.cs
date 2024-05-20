@@ -25,7 +25,6 @@ namespace JFramework.Net
         public string roomName = "Game Room";
         public string roomData = "Map 1";
         public int maxPlayers = 10;
-        public bool isStart;
         public bool isPublic = true;
         public List<Room> rooms = new List<Room>();
 
@@ -540,7 +539,7 @@ namespace JFramework.Net
             buffers.WriteString(ref position, roomName);
             buffers.WriteString(ref position, roomData);
             buffers.WriteInt(ref position, maxPlayers);
-            buffers.WriteBool(ref position, isStart);
+            buffers.WriteBool(ref position, false);
             buffers.WriteBool(ref position, isPublic);
             if (isPunch)
             {
