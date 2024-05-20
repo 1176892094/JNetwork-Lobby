@@ -31,11 +31,6 @@ namespace JFramework.Net
         /// 房间最大人数
         /// </summary>
         public int maxCount;
-
-        /// <summary>
-        /// 是否开始
-        /// </summary>
-        public bool isStart;
         
         /// <summary>
         /// 是否显示

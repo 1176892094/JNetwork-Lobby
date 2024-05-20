@@ -111,7 +111,6 @@ namespace JFramework.Net
                         data = data.ReadString(ref position),
                         ownerId = clientId,
                         maxCount = data.ReadInt(ref position),
-                        isStart = data.ReadBool(ref position),
                         isPublic = data.ReadBool(ref position),
                         clients = new List<int>(),
                         address = data.ReadString(ref position),
@@ -135,7 +134,7 @@ namespace JFramework.Net
                     var ownerId = data.ReadString(ref position);
                     var isPunch = data.ReadBool(ref position);
                     ServerDisconnected(clientId);
-                    if (rooms.TryGetValue(ownerId, out var room) && room.clients.Count + 1 < room.maxCount && !room.isStart)
+                    if (rooms.TryGetValue(ownerId, out var room) && room.clients.Count + 1 < room.maxCount)
                     {
                         room.clients.Add(clientId);
                         clients.Add(clientId, room);
@@ -186,7 +185,6 @@ namespace JFramework.Net
                     {
                         room.name = data.ReadString(ref position);
                         room.data = data.ReadString(ref position);
-                        room.isStart = data.ReadBool(ref position);
                         room.isPublic = data.ReadBool(ref position);
                         room.maxCount = data.ReadInt(ref position);
                     }

@@ -60,8 +60,7 @@ namespace JFramework.Net
                         if (inter.OperationalStatus == OperationalStatus.Up && inter.NetworkInterfaceType != NetworkInterfaceType.Loopback)
                         {
                             var properties = inter.GetIPProperties();
-                            var ip = properties.UnicastAddresses.FirstOrDefault(
-                                ip => ip.Address.AddressFamily == AddressFamily.InterNetwork);
+                            var ip = properties.UnicastAddresses.FirstOrDefault(ip => ip.Address.AddressFamily == AddressFamily.InterNetwork);
                             if (ip != null)
                             {
                                 return ip.Address.ToString();
@@ -175,7 +174,7 @@ namespace JFramework.Net
             {
                 return;
             }
-
+            
             if (isPunch)
             {
                 mediator.StopServer();
@@ -436,7 +435,7 @@ namespace JFramework.Net
             }
         }
 
-        public void UpdateRoom(string roomName, string roomData, bool isStart, bool isPublic, int maxPlayers)
+        public void UpdateRoom(string roomName, string roomData, bool isPublic, int maxPlayers)
         {
             if (isServer)
             {
@@ -444,7 +443,6 @@ namespace JFramework.Net
                 buffers.WriteByte(ref position, (byte)OpCodes.UpdateRoom);
                 buffers.WriteString(ref position, roomName);
                 buffers.WriteString(ref position, roomData);
-                buffers.WriteBool(ref position, isStart);
                 buffers.WriteBool(ref position, isPublic);
                 buffers.WriteInt(ref position, maxPlayers);
                 transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
@@ -539,7 +537,6 @@ namespace JFramework.Net
             buffers.WriteString(ref position, roomName);
             buffers.WriteString(ref position, roomData);
             buffers.WriteInt(ref position, maxPlayers);
-            buffers.WriteBool(ref position, false);
             buffers.WriteBool(ref position, isPublic);
             if (isPunch)
             {
@@ -733,7 +730,6 @@ namespace JFramework.Net
             public string id;
             public string name;
             public string data;
-            public bool isStart;
             public bool isPublic;
             public int maxCount;
             public List<int> clients;
