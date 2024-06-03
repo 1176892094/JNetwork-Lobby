@@ -95,7 +95,7 @@ namespace JFramework.Net
                 return;
             }
 
-            mediator = this.FindComponent<NetworkMediator>();
+            mediator = EntityManager.GetComponent<NetworkMediator>(this);
             if (isPunch)
             {
                 if (puncher is not NetworkTransport)
