@@ -144,10 +144,10 @@ namespace JFramework.Net
 
         private void OnDestroy()
         {
-            DisconnectToLobby();
+            StopLobby();
         }
 
-        public void ConnectToLobby()
+        public void StartLobby()
         {
             if (clientState != ConnectState.Disconnected)
             {
@@ -161,7 +161,7 @@ namespace JFramework.Net
             transport.ClientConnect();
         }
 
-        public void DisconnectToLobby()
+        public void StopLobby()
         {
             if (clientState == ConnectState.Disconnected)
             {
