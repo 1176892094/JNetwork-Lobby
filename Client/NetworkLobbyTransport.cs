@@ -16,16 +16,14 @@ namespace JFramework.Net
     [DefaultExecutionOrder(1001)]
     public partial class NetworkLobbyTransport : Transport, IEntity
     {
-        public Transport transport;
-        public Transport puncher;
-        public bool isAwake = true;
-        public float heartBeat = 3;
+        public int maxPlayers = 4;
+        public bool isPublic = true;
+        public float sendRate = 3;
         public string serverId;
         public string serverKey = "Secret Key";
         public string roomName = "Game Room";
         public string roomData = "Map 1";
-        public int maxPlayers = 10;
-        public bool isPublic = true;
+        public Transport transport;
         public List<Room> rooms = new List<Room>();
 
         private int playerId;
@@ -39,7 +37,7 @@ namespace JFramework.Net
         private IPEndPoint remoteEndPoint;
         private SocketProxy clientProxy;
         private ConnectState clientState;
-        private NetworkMediator mediator;
+        private NetworkPunchTransport punchTransport;
         private readonly HashMap<int, int> clients = new HashMap<int, int>();
         private readonly HashMap<int, int> connections = new HashMap<int, int>();
         private readonly HashMap<IPEndPoint, SocketProxy> proxies = new HashMap<IPEndPoint, SocketProxy>();
@@ -47,6 +45,8 @@ namespace JFramework.Net
         public event Action OnRoomUpdate;
         public event Action OnDisconnect;
         public bool isPunch => puncher != null;
+        public Transport puncher => punchTransport.transport;
+
 
         public string currentIp
         {
@@ -60,7 +60,8 @@ namespace JFramework.Net
                         if (inter.OperationalStatus == OperationalStatus.Up && inter.NetworkInterfaceType != NetworkInterfaceType.Loopback)
                         {
                             var properties = inter.GetIPProperties();
-                            var ip = properties.UnicastAddresses.FirstOrDefault(ip => ip.Address.AddressFamily == AddressFamily.InterNetwork);
+                            var ip = properties.UnicastAddresses.FirstOrDefault(
+                                ip => ip.Address.AddressFamily == AddressFamily.InterNetwork);
                             if (ip != null)
                             {
                                 return ip.Address.ToString();
@@ -89,26 +90,12 @@ namespace JFramework.Net
 
         private void Awake()
         {
-            if (transport is NetworkLobbyTransport)
+            transport = GetComponent<NetworkTransport>();
+            punchTransport = GetComponentInChildren<NetworkPunchTransport>();
+            if (isPunch && puncher == transport)
             {
-                Debug.LogWarning("请使用 NetworkTransport 进行传输！");
+                Debug.LogWarning("中继传输 和 NAT传输 不能相同！");
                 return;
-            }
-
-            mediator = EntityManager.GetComponent<NetworkMediator>(this);
-            if (isPunch)
-            {
-                if (puncher is not NetworkTransport)
-                {
-                    Debug.LogWarning("请使用 NetworkTransport 进行NAT传输！");
-                    return;
-                }
-
-                if (puncher == transport)
-                {
-                    Debug.LogWarning("中继传输 和 NAT传输 不能相同！");
-                    return;
-                }
             }
 
             transport.OnClientConnected -= OnClientConnected;
@@ -118,12 +105,7 @@ namespace JFramework.Net
             transport.OnClientDisconnected += OnClientDisconnected;
             transport.OnClientReceive += OnClientReceive;
 
-            if (isAwake)
-            {
-                ConnectToLobby();
-            }
-
-            InvokeRepeating(nameof(HeartBeat), heartBeat, heartBeat);
+            InvokeRepeating(nameof(HeartBeat), sendRate, sendRate);
 
             void OnClientConnected()
             {
@@ -174,10 +156,10 @@ namespace JFramework.Net
             {
                 return;
             }
-            
+
             if (isPunch)
             {
-                mediator.StopServer();
+                punchTransport.StopServer();
                 punchClient?.Dispose();
                 punchClient = null;
                 punching = false;
@@ -327,7 +309,7 @@ namespace JFramework.Net
                         clientProxy = new SocketProxy(punchEndPoint.Port - 1, ClientSend);
                     }
 
-                    mediator.JoinServer("127.0.0.1", punchEndPoint.Port - 1);
+                    punchTransport.JoinServer("127.0.0.1", punchEndPoint.Port - 1);
                 }
             }
         }
@@ -485,7 +467,7 @@ namespace JFramework.Net
         {
             if (punching)
             {
-                mediator.ClientSend(segment, channel);
+                punchTransport.ClientSend(segment, channel);
             }
             else
             {
@@ -503,7 +485,7 @@ namespace JFramework.Net
             var position = 0;
             buffers.WriteByte(ref position, (byte)OpCodes.LeaveRoom);
             transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
-            mediator.ClientDisconnect();
+            punchTransport.ClientDisconnect();
         }
 
         public override void StartServer()
@@ -542,7 +524,7 @@ namespace JFramework.Net
             {
                 buffers.WriteString(ref position, punchEndPoint.Address.ToString());
                 buffers.WriteInt(ref position, punchEndPoint.Port + 1);
-                mediator.StartServer(punchEndPoint.Port + 1);
+                punchTransport.StartServer(punchEndPoint.Port + 1);
                 Debug.Log("NAT服务器地址:" + punchEndPoint.Address + ":" + (punchEndPoint.Port + 1));
             }
             else
@@ -561,7 +543,7 @@ namespace JFramework.Net
         {
             if (isPunch && connections.TryGetSecond(clientId, out int connection))
             {
-                mediator.ServerSend(connection, segment, channel);
+                punchTransport.ServerSend(connection, segment, channel);
             }
             else
             {
@@ -586,7 +568,7 @@ namespace JFramework.Net
 
             if (connections.TryGetSecond(clientId, out int connection))
             {
-                mediator.ServerDisconnect(connection);
+                punchTransport.ServerDisconnect(connection);
             }
         }
 
@@ -598,7 +580,7 @@ namespace JFramework.Net
                 var position = 0;
                 buffers.WriteByte(ref position, (byte)OpCodes.LeaveRoom);
                 transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
-                mediator.StopServer();
+                punchTransport.StopServer();
                 var keys = proxies.Keys.ToList();
                 foreach (var key in keys)
                 {
@@ -632,23 +614,23 @@ namespace JFramework.Net
         public override void ClientEarlyUpdate()
         {
             transport.ClientEarlyUpdate();
-            mediator.ClientEarlyUpdate();
+            punchTransport.ClientEarlyUpdate();
         }
 
         public override void ClientAfterUpdate()
         {
             transport.ClientAfterUpdate();
-            mediator.ClientAfterUpdate();
+            punchTransport.ClientAfterUpdate();
         }
 
         public override void ServerEarlyUpdate()
         {
-            mediator.ServerEarlyUpdate();
+            punchTransport.ServerEarlyUpdate();
         }
 
         public override void ServerAfterUpdate()
         {
-            mediator.ServerAfterUpdate();
+            punchTransport.ServerAfterUpdate();
         }
     }
 

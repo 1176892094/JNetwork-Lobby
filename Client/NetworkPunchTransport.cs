@@ -1,23 +1,23 @@
 ﻿using System;
-using JFramework;
 using JFramework.Net;
 using UnityEngine;
 
-public class NetworkMediator : Component<NetworkLobbyTransport>
+[RequireComponent(typeof(NetworkTransport))]
+public class NetworkPunchTransport : MonoBehaviour
 {
     /// <summary>
     /// 使用的传输
     /// </summary>
-    private Transport transport;
+    public Transport transport;
 
     /// <summary>
     /// 初始化使用大厅的委托
     /// </summary>
     private void Awake()
     {
-        transport = owner.puncher;
         if (transport != null)
         {
+            var owner = transform.parent.GetComponent<NetworkLobbyTransport>();
             transport.OnServerConnected -= owner.NATServerConnected;
             transport.OnServerReceive -= owner.NATServerReceive;
             transport.OnServerDisconnected -= owner.NATServerDisconnected;
