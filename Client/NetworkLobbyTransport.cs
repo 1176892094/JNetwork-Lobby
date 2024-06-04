@@ -88,6 +88,12 @@ namespace JFramework.Net
 
         private void Awake()
         {
+            if (transport == puncher)
+            {
+                Debug.Log("大厅和内网穿透不能使用同一个传输！");
+                return;
+            }
+
             transport.OnClientConnected -= OnClientConnected;
             transport.OnClientDisconnected -= OnClientDisconnected;
             transport.OnClientReceive -= OnClientReceive;
@@ -134,16 +140,6 @@ namespace JFramework.Net
                     Debug.LogWarning(e);
                 }
             }
-        }
-
-        private void OnValidate()
-        {
-            if (transport != null) return;
-            gameObject.name = nameof(NetworkLobbyTransport);
-            transport = gameObject.AddComponent<NetworkTransport>();
-            var obj = new GameObject(nameof(NetworkTransport));
-            puncher = obj.AddComponent<NetworkTransport>();
-            obj.transform.SetParent(transform);
         }
 
         private void OnDestroy()
