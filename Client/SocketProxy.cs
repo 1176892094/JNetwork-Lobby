@@ -4,7 +4,7 @@ using System.Net.Sockets;
 
 namespace JFramework.Net
 {
-    public class SocketProxy
+    internal class SocketProxy
     {
         /// <summary>
         /// 代理是否活跃
