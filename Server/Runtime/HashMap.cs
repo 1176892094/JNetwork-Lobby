@@ -1,12 +1,13 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 
 namespace JFramework.Net
 {
     internal class HashMap<TFirst, TSecond>
     {
-        private readonly IDictionary<TFirst, TSecond> firstToSecond = new Dictionary<TFirst, TSecond>();
-        private readonly IDictionary<TSecond, TFirst> secondToFirst = new Dictionary<TSecond, TFirst>();
+        private readonly IDictionary<TFirst, TSecond> firstToSecond = new ConcurrentDictionary<TFirst, TSecond>();
+        private readonly IDictionary<TSecond, TFirst> secondToFirst = new ConcurrentDictionary<TSecond, TFirst>();
         public ICollection<TFirst> Keys => secondToFirst.Values;
         public ICollection<TSecond> Values => firstToSecond.Values;
 

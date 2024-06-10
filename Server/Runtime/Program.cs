@@ -182,8 +182,8 @@ namespace JFramework.Net
                         var clientId = segment.ReadString(ref position);
                         if (punches.TryGetSecond(clientId, out position))
                         {
-                            connections.Add(position, new IPEndPoint(endPoint.Address, endPoint.Port));
                             Debug.Log($"客户端 {position} 建立端口映射。" + endPoint);
+                            connections[position] = new IPEndPoint(endPoint.Address, endPoint.Port);
                             punches.Remove(position);
                         }
                     }
