@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
-using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Threading.Tasks;
 using JFramework.Core;
@@ -18,73 +17,30 @@ namespace JFramework.Net
     {
         public Transport transport;
         public Transport puncher;
-        public int maxPlayers = 4;
         public bool isPublic = true;
         public float sendRate = 3;
         public string serverId;
         public string serverKey = "Secret Key";
         public string roomName = "Game Room";
         public string roomData = "Map 1";
-        public List<Room> rooms = new List<Room>();
-
         private int playerId;
         private bool isClient;
         private bool isServer;
         private bool punching;
         private byte[] buffers;
+        private StateMode state;
         private UdpClient punchClient;
         private SocketProxy clientProxy;
         private IPEndPoint punchEndPoint;
         private IPEndPoint serverEndPoint;
         private IPEndPoint remoteEndPoint;
-        private ConnectState clientState;
         private readonly HashMap<int, int> clients = new HashMap<int, int>();
         private readonly HashMap<int, int> connections = new HashMap<int, int>();
         private readonly HashMap<IPEndPoint, SocketProxy> proxies = new HashMap<IPEndPoint, SocketProxy>();
 
-        public event Action OnRoomUpdate;
-        public event Action OnDisconnect;
+        public event Action<List<Room>> OnRoomUpdate;
         public bool isPunch => puncher != null;
-
-        public string currentIp
-        {
-            get
-            {
-                try
-                {
-                    var interfaces = NetworkInterface.GetAllNetworkInterfaces();
-                    foreach (var inter in interfaces)
-                    {
-                        if (inter.OperationalStatus == OperationalStatus.Up && inter.NetworkInterfaceType != NetworkInterfaceType.Loopback)
-                        {
-                            var properties = inter.GetIPProperties();
-                            var ip = properties.UnicastAddresses.FirstOrDefault(
-                                ip => ip.Address.AddressFamily == AddressFamily.InterNetwork);
-                            if (ip != null)
-                            {
-                                return ip.Address.ToString();
-                            }
-                        }
-                    }
-
-                    // 虚拟机无法解析网络接口 因此额外解析主机地址
-                    var addresses = Dns.GetHostEntry(Dns.GetHostName()).AddressList;
-                    foreach (var ip in addresses)
-                    {
-                        if (ip.AddressFamily == AddressFamily.InterNetwork)
-                        {
-                            return ip.ToString();
-                        }
-                    }
-
-                    return "127.0.0.1";
-                }
-                catch
-                {
-                    return "127.0.0.1";
-                }
-            }
-        }
+        public bool isActive => state != StateMode.Disconnect;
 
         private void Awake()
         {
@@ -94,46 +50,46 @@ namespace JFramework.Net
                 return;
             }
 
-            transport.OnClientConnected -= OnClientConnected;
-            transport.OnClientDisconnected -= OnClientDisconnected;
+            transport.OnClientConnect -= OnClientConnect;
+            transport.OnClientDisconnect -= OnClientDisconnect;
             transport.OnClientReceive -= OnClientReceive;
-            transport.OnClientConnected += OnClientConnected;
-            transport.OnClientDisconnected += OnClientDisconnected;
+            transport.OnClientConnect += OnClientConnect;
+            transport.OnClientDisconnect += OnClientDisconnect;
             transport.OnClientReceive += OnClientReceive;
             if (isPunch)
             {
-                puncher.OnServerConnected -= NATServerConnected;
+                puncher.OnServerConnect -= NATServerConnect;
                 puncher.OnServerReceive -= NATServerReceive;
-                puncher.OnServerDisconnected -= NATServerDisconnected;
-                puncher.OnClientConnected -= NATClientConnected;
+                puncher.OnServerDisconnect -= NATServerDisconnect;
+                puncher.OnClientConnect -= NATClientConnect;
                 puncher.OnClientReceive -= NATClientReceive;
-                puncher.OnClientDisconnected -= NATClientDisconnected;
-                puncher.OnServerConnected += NATServerConnected;
+                puncher.OnClientDisconnect -= NATClientDisconnect;
+                puncher.OnServerConnect += NATServerConnect;
                 puncher.OnServerReceive += NATServerReceive;
-                puncher.OnServerDisconnected += NATServerDisconnected;
-                puncher.OnClientConnected += NATClientConnected;
+                puncher.OnServerDisconnect += NATServerDisconnect;
+                puncher.OnClientConnect += NATClientConnect;
                 puncher.OnClientReceive += NATClientReceive;
-                puncher.OnClientDisconnected += NATClientDisconnected;
+                puncher.OnClientDisconnect += NATClientDisconnect;
             }
 
             InvokeRepeating(nameof(HeartBeat), sendRate, sendRate);
+            return;
 
-            void OnClientConnected()
+            void OnClientConnect()
             {
-                clientState = ConnectState.Connected;
+                state = StateMode.Connect;
             }
 
-            void OnClientDisconnected()
+            void OnClientDisconnect()
             {
-                clientState = ConnectState.Disconnected;
-                OnDisconnect?.Invoke();
+                state = StateMode.Disconnect;
             }
 
-            void OnClientReceive(ArraySegment<byte> segment, Channel channel)
+            void OnClientReceive(ArraySegment<byte> segment, int channel)
             {
                 try
                 {
-                    ClientReceive(segment, channel);
+                    OnMessageReceive(segment, channel);
                 }
                 catch (Exception e)
                 {
@@ -149,59 +105,57 @@ namespace JFramework.Net
 
         public void StartLobby()
         {
-            if (clientState != ConnectState.Disconnected)
+            if (isActive)
             {
-                Debug.Log("已连接到大厅服务器!");
+                Debug.LogWarning("大厅服务器已经连接！");
                 return;
             }
 
             transport.port = port;
             transport.address = address;
-            buffers = new byte[transport.GetMaxPacketSize()];
-            transport.ClientConnect();
+            buffers = new byte[transport.MessageSize(Channel.Reliable)];
+            transport.StartClient();
         }
 
         public void StopLobby()
         {
-            if (clientState == ConnectState.Disconnected)
-            {
-                return;
-            }
-
+            if (!isActive) return;
+            Debug.Log("停止大厅服务器。");
+            state = StateMode.Disconnect;
             if (isPunch)
             {
+                punching = false;
+                puncher.StopClient();
                 puncher.StopServer();
                 punchClient?.Dispose();
-                punchClient = null;
-                punching = false;
                 clientProxy?.Dispose();
+                punchClient = null;
                 clientProxy = null;
             }
 
+            clients.Clear();
+            proxies.Clear();
             isServer = false;
             isClient = false;
-            clients.Clear();
             connections.Clear();
-            proxies.Clear();
-            clientState = ConnectState.Disconnected;
-            transport.ClientDisconnect();
+            transport.StopClient();
         }
 
-        private void ClientReceive(ArraySegment<byte> segment, Channel channel)
+        private void OnMessageReceive(ArraySegment<byte> segment, int channel)
         {
             var data = segment.Array;
             var position = segment.Offset;
             var opcode = (OpCodes)data.ReadByte(ref position);
-            if (opcode == OpCodes.Connected)
+            if (opcode == OpCodes.Connect)
             {
                 position = 0;
-                buffers.WriteByte(ref position, (byte)OpCodes.Authority);
+                buffers.WriteByte(ref position, (byte)OpCodes.Connected);
                 buffers.WriteString(ref position, serverKey);
-                transport.ClientSend(new ArraySegment<byte>(buffers, 0, position), channel);
+                transport.SendToClient(new ArraySegment<byte>(buffers, 0, position), channel);
             }
-            else if (opcode == OpCodes.Authority)
+            else if (opcode == OpCodes.Connected)
             {
-                clientState = ConnectState.Authority;
+                state = StateMode.Connected;
                 UpdateRoom();
             }
             else if (opcode == OpCodes.CreateRoom)
@@ -213,13 +167,13 @@ namespace JFramework.Net
                 if (isServer)
                 {
                     clients.Add(data.ReadInt(ref position), playerId);
-                    OnServerConnected?.Invoke(playerId);
+                    OnServerConnect?.Invoke(playerId);
                     playerId++;
                 }
 
                 if (isClient)
                 {
-                    OnClientConnected?.Invoke();
+                    OnClientConnect?.Invoke();
                 }
             }
             else if (opcode == OpCodes.LeaveRoom)
@@ -227,7 +181,7 @@ namespace JFramework.Net
                 if (isClient)
                 {
                     isClient = false;
-                    OnClientDisconnected?.Invoke();
+                    OnClientDisconnect?.Invoke();
                 }
             }
             else if (opcode == OpCodes.UpdateData)
@@ -253,7 +207,7 @@ namespace JFramework.Net
                     int clientId = data.ReadInt(ref position);
                     if (clients.Keys.Contains(clientId))
                     {
-                        OnServerDisconnected?.Invoke(clients.GetFirst(clientId));
+                        OnServerDisconnect?.Invoke(clients.GetFirst(clientId));
                         clients.Remove(clientId);
                     }
                 }
@@ -270,7 +224,7 @@ namespace JFramework.Net
                     {
                         try
                         {
-                            punchEndPoint = new IPEndPoint(IPAddress.Parse(currentIp), Random.Range(16000, 17000));
+                            punchEndPoint = new IPEndPoint(IPAddress.Parse(NetworkUtility.GetHostName()), Random.Range(16000, 17000));
                             punchClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
                             punchClient.Client.Bind(punchEndPoint);
                             Debug.Log("内网穿透地址：" + punchEndPoint);
@@ -317,12 +271,12 @@ namespace JFramework.Net
                 {
                     if (clientProxy == null && isPunch && punched)
                     {
-                        clientProxy = new SocketProxy(punchEndPoint.Port - 1, ClientSend);
+                        clientProxy = new SocketProxy(punchEndPoint.Port - 1, SendToClient);
                     }
 
                     puncher.address = "127.0.0.1";
                     puncher.port = (ushort)(punchEndPoint.Port - 1);
-                    puncher.ClientConnect();
+                    puncher.StartClient();
                 }
             }
         }
@@ -356,12 +310,12 @@ namespace JFramework.Net
                     {
                         if (segment.Length > 2)
                         {
-                            proxy.ServerSend(segment);
+                            proxy.SendToServer(segment);
                         }
                     }
                     else
                     {
-                        proxies.Add(endPoint, new SocketProxy(punchEndPoint.Port + 1, ServerSend, endPoint));
+                        proxies.Add(endPoint, new SocketProxy(punchEndPoint.Port + 1, SendToServer, endPoint));
                     }
                 }
 
@@ -369,11 +323,11 @@ namespace JFramework.Net
                 {
                     if (clientProxy != null)
                     {
-                        clientProxy.ClientSend(segment);
+                        clientProxy.SendToClient(segment);
                     }
                     else
                     {
-                        clientProxy = new SocketProxy(punchEndPoint.Port - 1, ClientSend);
+                        clientProxy = new SocketProxy(punchEndPoint.Port - 1, SendToClient);
                     }
                 }
             }
@@ -381,34 +335,32 @@ namespace JFramework.Net
             punchClient.BeginReceive(ReceiveData, punchClient);
         }
 
-        private void ServerSend(IPEndPoint endPoint, byte[] data)
+        private void SendToServer(IPEndPoint endPoint, byte[] data)
         {
             punchClient.Send(data, data.Length, endPoint);
         }
 
-        private void ClientSend(byte[] data)
+        private void SendToClient(byte[] data)
         {
             punchClient.Send(data, data.Length, remoteEndPoint);
         }
 
         private void HeartBeat()
         {
-            if (clientState != ConnectState.Disconnected)
+            if (!isActive) return;
+            transport.SendToClient(new[] { byte.MaxValue });
+            punchClient?.Send(new byte[] { 0 }, 1, serverEndPoint);
+            var keys = proxies.Keys.ToList();
+            foreach (var key in keys.Where(ip => proxies.GetFirst(ip).interval > 10))
             {
-                transport.ClientSend(new[] { byte.MaxValue });
-                punchClient?.Send(new byte[] { 0 }, 1, serverEndPoint);
-                var keys = proxies.Keys.ToList();
-                foreach (var key in keys.Where(ip => proxies.GetFirst(ip).interval > 10))
-                {
-                    proxies.GetFirst(key).Dispose();
-                    proxies.Remove(key);
-                }
+                proxies.GetFirst(key).Dispose();
+                proxies.Remove(key);
             }
         }
 
         public async void UpdateRoom()
         {
-            if (clientState == ConnectState.Authority)
+            if (state == StateMode.Connected)
             {
                 var uri = $"http://{address}:{port}/api/compressed/servers";
                 using var request = UnityWebRequest.Get(uri);
@@ -421,8 +373,7 @@ namespace JFramework.Net
 
                 var json = "{" + "\"value\":" + request.downloadHandler.text.Decompress() + "}";
                 Debug.Log("房间信息：" + json);
-                rooms = JsonManager.Reader<List<Room>>(json);
-                OnRoomUpdate?.Invoke();
+                OnRoomUpdate?.Invoke(JsonManager.Reader<List<Room>>(json));
             }
             else
             {
@@ -440,24 +391,19 @@ namespace JFramework.Net
                 buffers.WriteString(ref position, roomData);
                 buffers.WriteBool(ref position, isPublic);
                 buffers.WriteInt(ref position, maxPlayers);
-                transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
+                transport.SendToClient(new ArraySegment<byte>(buffers, 0, position));
             }
         }
     }
 
     public partial class NetworkLobbyTransport
     {
-        public override void ClientConnect(Uri uri = null)
+        public override void StartClient()
         {
-            if (uri != null)
-            {
-                address = uri.Host;
-            }
-
-            if (clientState == ConnectState.Disconnected)
+            if (!isActive)
             {
                 Debug.Log("没有连接到大厅!");
-                OnClientDisconnected?.Invoke();
+                OnClientDisconnect?.Invoke();
                 return;
             }
 
@@ -473,14 +419,24 @@ namespace JFramework.Net
             buffers.WriteString(ref position, transport.address);
             buffers.WriteBool(ref position, isPunch);
             isClient = true;
-            transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
+            transport.SendToClient(new ArraySegment<byte>(buffers, 0, position));
         }
 
-        public override void ClientSend(ArraySegment<byte> segment, Channel channel = Channel.Reliable)
+        public override void StartClient(Uri uri)
+        {
+            if (uri != null)
+            {
+                address = uri.Host;
+            }
+
+            StartClient();
+        }
+
+        public override void SendToClient(ArraySegment<byte> segment, int channel = Channel.Reliable)
         {
             if (punching)
             {
-                puncher.ClientSend(segment, channel);
+                puncher.SendToClient(segment, channel);
             }
             else
             {
@@ -488,25 +444,25 @@ namespace JFramework.Net
                 buffers.WriteByte(ref position, (byte)OpCodes.UpdateData);
                 buffers.WriteBytes(ref position, segment.Array.Take(segment.Count).ToArray());
                 buffers.WriteInt(ref position, 0);
-                transport.ClientSend(new ArraySegment<byte>(buffers, 0, position), channel);
+                transport.SendToClient(new ArraySegment<byte>(buffers, 0, position), channel);
             }
         }
 
-        public override void ClientDisconnect()
+        public override void StopClient()
         {
             isClient = false;
             var position = 0;
             buffers.WriteByte(ref position, (byte)OpCodes.LeaveRoom);
-            transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
+            transport.SendToClient(new ArraySegment<byte>(buffers, 0, position));
             if (isPunch)
             {
-                puncher.ClientDisconnect();
+                puncher.StopClient();
             }
         }
 
         public override void StartServer()
         {
-            if (clientState == ConnectState.Disconnected)
+            if (!isActive)
             {
                 Debug.Log("没有连接到大厅!");
                 return;
@@ -534,7 +490,7 @@ namespace JFramework.Net
             buffers.WriteByte(ref position, (byte)OpCodes.CreateRoom);
             buffers.WriteString(ref position, roomName);
             buffers.WriteString(ref position, roomData);
-            buffers.WriteInt(ref position, maxPlayers);
+            buffers.WriteInt(ref position, NetworkManager.Instance.connection);
             buffers.WriteBool(ref position, isPublic);
             if (isPunch)
             {
@@ -552,15 +508,15 @@ namespace JFramework.Net
 
 
             buffers.WriteBool(ref position, isPunch);
-            buffers.WriteBool(ref position, isPunch && currentIp != "127.0.0.1");
-            transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
+            buffers.WriteBool(ref position, isPunch && NetworkUtility.GetHostName() != "127.0.0.1");
+            transport.SendToClient(new ArraySegment<byte>(buffers, 0, position));
         }
 
-        public override void ServerSend(int clientId, ArraySegment<byte> segment, Channel channel = Channel.Reliable)
+        public override void SendToServer(int clientId, ArraySegment<byte> segment, int channel = Channel.Reliable)
         {
             if (isPunch && connections.TryGetSecond(clientId, out int connection))
             {
-                puncher.ServerSend(connection, segment, channel);
+                puncher.SendToServer(connection, segment, channel);
             }
             else
             {
@@ -568,24 +524,24 @@ namespace JFramework.Net
                 buffers.WriteByte(ref position, (byte)OpCodes.UpdateData);
                 buffers.WriteBytes(ref position, segment.Array.Take(segment.Count).ToArray());
                 buffers.WriteInt(ref position, clients.GetSecond(clientId));
-                transport.ClientSend(new ArraySegment<byte>(buffers, 0, position), channel);
+                transport.SendToClient(new ArraySegment<byte>(buffers, 0, position), channel);
             }
         }
 
-        public override void ServerDisconnect(int clientId)
+        public override void StopServer(int clientId)
         {
             if (clients.TryGetSecond(clientId, out int ownerId))
             {
                 var position = 0;
                 buffers.WriteByte(ref position, (byte)OpCodes.Disconnect);
                 buffers.WriteInt(ref position, ownerId);
-                transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
+                transport.SendToClient(new ArraySegment<byte>(buffers, 0, position));
                 return;
             }
 
             if (isPunch && connections.TryGetSecond(clientId, out int connection))
             {
-                puncher.ServerDisconnect(connection);
+                puncher.StopServer(connection);
             }
         }
 
@@ -596,7 +552,7 @@ namespace JFramework.Net
                 isServer = false;
                 var position = 0;
                 buffers.WriteByte(ref position, (byte)OpCodes.LeaveRoom);
-                transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
+                transport.SendToClient(new ArraySegment<byte>(buffers, 0, position));
                 if (isPunch)
                 {
                     puncher.StopServer();
@@ -611,25 +567,9 @@ namespace JFramework.Net
             }
         }
 
-        public override Uri GetServerUri()
+        public override int MessageSize(int channel)
         {
-            var builder = new UriBuilder
-            {
-                Scheme = "UDP",
-                Host = serverId
-            };
-
-            return builder.Uri;
-        }
-
-        public override int GetMaxPacketSize(Channel channel = Channel.Reliable)
-        {
-            return transport.GetMaxPacketSize(channel);
-        }
-
-        public override int UnreliableSize()
-        {
-            return transport.UnreliableSize();
+            return transport.MessageSize(channel);
         }
 
         public override void ClientEarlyUpdate()
@@ -669,18 +609,18 @@ namespace JFramework.Net
 
     public partial class NetworkLobbyTransport
     {
-        public void NATServerConnected(int clientId)
+        public void NATServerConnect(int clientId)
         {
             if (isServer)
             {
                 Debug.Log($"客户端 {clientId} 加入NAT服务器");
                 connections.Add(clientId, playerId);
-                OnServerConnected?.Invoke(playerId);
+                OnServerConnect?.Invoke(playerId);
                 playerId++;
             }
         }
 
-        public void NATServerReceive(int clientId, ArraySegment<byte> segment, Channel channel)
+        public void NATServerReceive(int clientId, ArraySegment<byte> segment, int channel)
         {
             if (isServer)
             {
@@ -688,23 +628,23 @@ namespace JFramework.Net
             }
         }
 
-        public void NATServerDisconnected(int clientId)
+        public void NATServerDisconnect(int clientId)
         {
             if (isServer)
             {
                 Debug.Log($"客户端 {clientId} 从NAT服务器断开");
-                OnServerDisconnected?.Invoke(connections.GetFirst(clientId));
+                OnServerDisconnect?.Invoke(connections.GetFirst(clientId));
                 connections.Remove(clientId);
             }
         }
 
-        public void NATClientConnected()
+        public void NATClientConnect()
         {
             punching = true;
-            OnClientConnected?.Invoke();
+            OnClientConnect?.Invoke();
         }
 
-        public void NATClientReceive(ArraySegment<byte> segment, Channel channel)
+        public void NATClientReceive(ArraySegment<byte> segment, int channel)
         {
             if (isClient)
             {
@@ -712,14 +652,14 @@ namespace JFramework.Net
             }
         }
 
-        public void NATClientDisconnected()
+        public void NATClientDisconnect()
         {
             if (punching)
             {
                 isClient = false;
                 punching = false;
                 Debug.Log("从NAT服务器断开");
-                OnClientDisconnected?.Invoke();
+                OnClientDisconnect?.Invoke();
             }
             else
             {
@@ -728,7 +668,7 @@ namespace JFramework.Net
                 buffers.WriteByte(ref position, (byte)OpCodes.JoinRoom);
                 buffers.WriteString(ref position, transport.address);
                 buffers.WriteBool(ref position, false);
-                transport.ClientSend(new ArraySegment<byte>(buffers, 0, position));
+                transport.SendToClient(new ArraySegment<byte>(buffers, 0, position));
                 Debug.Log("从NAT服务器断开，切换至中继服务器。");
             }
 
@@ -752,8 +692,8 @@ namespace JFramework.Net
 
         public enum OpCodes
         {
-            Connected = 1,
-            Authority = 2,
+            Connect = 1,
+            Connected = 2,
             JoinRoom = 3,
             CreateRoom = 4,
             UpdateRoom = 5,
