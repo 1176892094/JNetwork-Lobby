@@ -23,12 +23,12 @@ namespace JFramework.Net
         public string serverKey = "Secret Key";
         public string roomName = "Game Room";
         public string roomData = "Map 1";
+        private StateMode state = StateMode.Disconnect;
         private int playerId;
         private bool isClient;
         private bool isServer;
         private bool punching;
         private byte[] buffers;
-        private StateMode state;
         private UdpClient punchClient;
         private SocketProxy clientProxy;
         private IPEndPoint punchEndPoint;
