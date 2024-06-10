@@ -74,8 +74,8 @@ namespace JFramework.Net
 
                 awakeMethod?.Invoke(transport, null);
                 Debug.Log("开始进行传输...");
-                service = new Service(transport.GetMaxPacketSize());
-                transport.OnServerConnected = clientId =>
+                service = new Service(transport.MessageSize(Channel.Reliable));
+                transport.OnServerConnect = clientId =>
                 {
                     clients.Add(clientId);
                     service.ServerConnected(clientId);
@@ -87,12 +87,12 @@ namespace JFramework.Net
                         buffers.WriteByte(ref position, (byte)OpCodes.NATPuncher);
                         buffers.WriteString(ref position, punchId);
                         buffers.WriteInt(ref position, setting.NATPunchPort);
-                        transport.ServerSend(clientId, new ArraySegment<byte>(buffers, 0, position));
+                        transport.SendToClient(clientId, new ArraySegment<byte>(buffers, 0, position));
                     }
                 };
 
                 transport.OnServerReceive = service.ServerReceive;
-                transport.OnServerDisconnected = clientId =>
+                transport.OnServerDisconnect = clientId =>
                 {
                     clients.Remove(clientId);
                     service.ServerDisconnected(clientId);
@@ -158,7 +158,7 @@ namespace JFramework.Net
                     heartBeat = 0;
                     foreach (var client in clients)
                     {
-                        transport.ServerSend(client, new ArraySegment<byte>(new[] { byte.MaxValue }));
+                        transport.SendToClient(client, new ArraySegment<byte>(new[] { byte.MaxValue }));
                     }
 
                     GC.Collect();

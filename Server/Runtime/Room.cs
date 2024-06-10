@@ -71,16 +71,16 @@ namespace JFramework.Net
     /// <summary>
     /// 传输通道
     /// </summary>
-    public enum Channel : byte
+    public static class Channel
     {
         /// <summary>
         /// 可靠
         /// </summary>
-        Reliable = 1,
-        
+        public const int Reliable = 1;
+
         /// <summary>
         /// 不可靠
         /// </summary>
-        Unreliable = 2
+        public const int UnReliable = 2;
     }
 }

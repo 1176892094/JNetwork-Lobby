@@ -26,7 +26,7 @@ namespace JFramework.Net
             var position = 0;
             var buffer = buffers.Rent(1);
             buffer.WriteByte(ref position, (byte)OpCodes.Connected);
-            Program.transport.ServerSend(clientId, new ArraySegment<byte>(buffer, 0, position));
+            Program.transport.SendToClient(clientId, new ArraySegment<byte>(buffer, 0, position));
             buffers.Return(buffer);
         }
 
@@ -42,7 +42,7 @@ namespace JFramework.Net
                     buffer.WriteByte(ref position, (byte)OpCodes.LeaveRoom);
                     foreach (var client in room.clients)
                     {
-                        Program.transport.ServerSend(client, new ArraySegment<byte>(buffer, 0, position));
+                        Program.transport.SendToClient(client, new ArraySegment<byte>(buffer, 0, position));
                         clients.Remove(client);
                     }
 
@@ -64,14 +64,14 @@ namespace JFramework.Net
                     var buffer = buffers.Rent(5);
                     buffer.WriteByte(ref position, (byte)OpCodes.Disconnect);
                     buffer.WriteInt(ref position, clientId);
-                    Program.transport.ServerSend(room.ownerId, new ArraySegment<byte>(buffer, 0, position));
+                    Program.transport.SendToClient(room.ownerId, new ArraySegment<byte>(buffer, 0, position));
                     buffers.Return(buffer);
                     clients.Remove(clientId);
                 }
             }
         }
 
-        public void ServerReceive(int clientId, ArraySegment<byte> segment, Channel channel)
+        public void ServerReceive(int clientId, ArraySegment<byte> segment, int channel)
         {
             try
             {
@@ -88,7 +88,7 @@ namespace JFramework.Net
                             position = 0;
                             var buffer = buffers.Rent(1);
                             buffer.WriteByte(ref position, (byte)OpCodes.Authority);
-                            Program.transport.ServerSend(clientId, new ArraySegment<byte>(buffer, 0, position));
+                            Program.transport.SendToClient(clientId, new ArraySegment<byte>(buffer, 0, position));
                             buffers.Return(buffer);
                             connections.Remove(clientId);
                         }
@@ -126,7 +126,7 @@ namespace JFramework.Net
                     var buffer = buffers.Rent(100);
                     buffer.WriteByte(ref position, (byte)OpCodes.CreateRoom);
                     buffer.WriteString(ref position, room.id);
-                    Program.transport.ServerSend(clientId, new ArraySegment<byte>(buffer, 0, position));
+                    Program.transport.SendToClient(clientId, new ArraySegment<byte>(buffer, 0, position));
                     buffers.Return(buffer);
                 }
                 else if (opcode == OpCodes.JoinRoom)
@@ -147,7 +147,7 @@ namespace JFramework.Net
                             buffer.WriteInt(ref position, room.owner.Port);
                             Debug.Log($"客户端 {clientId} 加入游戏房间。{connection} {room.owner.Address}:{room.owner.Port}");
                             buffer.WriteBool(ref position, room.isPunch);
-                            Program.transport.ServerSend(clientId, new ArraySegment<byte>(buffer, 0, position));
+                            Program.transport.SendToClient(clientId, new ArraySegment<byte>(buffer, 0, position));
 
                             if (room.isPunch) // 给主机发送连接者的地址
                             {
@@ -157,15 +157,15 @@ namespace JFramework.Net
                                 buffer.WriteInt(ref position, connection.Port);
                                 buffer.WriteBool(ref position, true);
                                 buffer.WriteInt(ref position, clientId);
-                                Program.transport.ServerSend(room.ownerId, new ArraySegment<byte>(buffer, 0, position));
+                                Program.transport.SendToClient(room.ownerId, new ArraySegment<byte>(buffer, 0, position));
                             }
                         }
                         else
                         {
                             buffer.WriteByte(ref position, (byte)OpCodes.JoinRoom);
                             buffer.WriteInt(ref position, clientId);
-                            Program.transport.ServerSend(clientId, new ArraySegment<byte>(buffer, 0, position));
-                            Program.transport.ServerSend(room.ownerId, new ArraySegment<byte>(buffer, 0, position));
+                            Program.transport.SendToClient(clientId, new ArraySegment<byte>(buffer, 0, position));
+                            Program.transport.SendToClient(room.ownerId, new ArraySegment<byte>(buffer, 0, position));
                         }
 
                         buffers.Return(buffer);
@@ -175,7 +175,7 @@ namespace JFramework.Net
                         position = 0;
                         var buffer = buffers.Rent(1);
                         buffer.WriteByte(ref position, (byte)OpCodes.LeaveRoom);
-                        Program.transport.ServerSend(clientId, new ArraySegment<byte>(buffer, 0, position));
+                        Program.transport.SendToClient(clientId, new ArraySegment<byte>(buffer, 0, position));
                         buffers.Return(buffer);
                     }
                 }
@@ -207,7 +207,7 @@ namespace JFramework.Net
                                 var buffer = buffers.Rent(segmentSize);
                                 buffer.WriteByte(ref position, (byte)OpCodes.UpdateData);
                                 buffer.WriteBytes(ref position, newData);
-                                Program.transport.ServerSend(targetId, new ArraySegment<byte>(buffer, 0, position), channel);
+                                Program.transport.SendToClient(targetId, new ArraySegment<byte>(buffer, 0, position), channel);
                                 buffers.Return(buffer);
                             }
                         }
@@ -218,7 +218,7 @@ namespace JFramework.Net
                             buffer.WriteByte(ref position, (byte)OpCodes.UpdateData);
                             buffer.WriteBytes(ref position, newData);
                             buffer.WriteInt(ref position, clientId);
-                            Program.transport.ServerSend(room.ownerId, new ArraySegment<byte>(buffer, 0, position), channel);
+                            Program.transport.SendToClient(room.ownerId, new ArraySegment<byte>(buffer, 0, position), channel);
                             buffers.Return(buffer);
                         }
                     }
@@ -231,7 +231,7 @@ namespace JFramework.Net
             catch (Exception e)
             {
                 Debug.Log(e.ToString(), ConsoleColor.Red);
-                Program.transport.ServerDisconnect(clientId);
+                Program.transport.StopClient(clientId);
             }
         }
     }

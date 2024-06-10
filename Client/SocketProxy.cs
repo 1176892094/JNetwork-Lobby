@@ -85,7 +85,7 @@ namespace JFramework.Net
         /// 这个方法将一组数据发送给在构造函数中定义好的远程端点。
         /// </summary>
         /// <param name="data"></param>
-        public void SendToServer(byte[] data)
+        public void SendToClient(byte[] data)
         {
             punchClient.Send(data, data.Length);
             dateTime = DateTime.Now;
@@ -95,7 +95,7 @@ namespace JFramework.Net
         /// 这个方法只有在客户端完成初始接收后才发送数据。它将数据发送到最近收到的数据包的来源。
         /// </summary>
         /// <param name="data"></param>
-        public void SendToClient(byte[] data)
+        public void SendToServer(byte[] data)
         {
             if (isActive)
             {

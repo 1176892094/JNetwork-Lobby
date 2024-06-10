@@ -151,7 +151,7 @@ namespace JFramework.Net
                 position = 0;
                 buffers.WriteByte(ref position, (byte)OpCodes.Connected);
                 buffers.WriteString(ref position, serverKey);
-                transport.SendToClient(new ArraySegment<byte>(buffers, 0, position), channel);
+                transport.SendToServer(new ArraySegment<byte>(buffers, 0, position), channel);
             }
             else if (opcode == OpCodes.Connected)
             {
@@ -310,7 +310,7 @@ namespace JFramework.Net
                     {
                         if (segment.Length > 2)
                         {
-                            proxy.SendToServer(segment);
+                            proxy.SendToClient(segment);
                         }
                     }
                     else
@@ -323,7 +323,7 @@ namespace JFramework.Net
                 {
                     if (clientProxy != null)
                     {
-                        clientProxy.SendToClient(segment);
+                        clientProxy.SendToServer(segment);
                     }
                     else
                     {
@@ -348,7 +348,7 @@ namespace JFramework.Net
         private void HeartBeat()
         {
             if (!isActive) return;
-            transport.SendToClient(new[] { byte.MaxValue });
+            transport.SendToServer(new[] { byte.MaxValue });
             punchClient?.Send(new byte[] { 0 }, 1, serverEndPoint);
             var keys = proxies.Keys.ToList();
             foreach (var key in keys.Where(ip => proxies.GetFirst(ip).interval > 10))
@@ -391,7 +391,7 @@ namespace JFramework.Net
                 buffers.WriteString(ref position, roomData);
                 buffers.WriteBool(ref position, isPublic);
                 buffers.WriteInt(ref position, maxPlayers);
-                transport.SendToClient(new ArraySegment<byte>(buffers, 0, position));
+                transport.SendToServer(new ArraySegment<byte>(buffers, 0, position));
             }
         }
     }
@@ -419,7 +419,7 @@ namespace JFramework.Net
             buffers.WriteString(ref position, transport.address);
             buffers.WriteBool(ref position, isPunch);
             isClient = true;
-            transport.SendToClient(new ArraySegment<byte>(buffers, 0, position));
+            transport.SendToServer(new ArraySegment<byte>(buffers, 0, position));
         }
 
         public override void StartClient(Uri uri)
@@ -432,11 +432,11 @@ namespace JFramework.Net
             StartClient();
         }
 
-        public override void SendToClient(ArraySegment<byte> segment, int channel = Channel.Reliable)
+        public override void SendToServer(ArraySegment<byte> segment, int channel = Channel.Reliable)
         {
             if (punching)
             {
-                puncher.SendToClient(segment, channel);
+                puncher.SendToServer(segment, channel);
             }
             else
             {
@@ -444,7 +444,7 @@ namespace JFramework.Net
                 buffers.WriteByte(ref position, (byte)OpCodes.UpdateData);
                 buffers.WriteBytes(ref position, segment.Array.Take(segment.Count).ToArray());
                 buffers.WriteInt(ref position, 0);
-                transport.SendToClient(new ArraySegment<byte>(buffers, 0, position), channel);
+                transport.SendToServer(new ArraySegment<byte>(buffers, 0, position), channel);
             }
         }
 
@@ -453,7 +453,7 @@ namespace JFramework.Net
             isClient = false;
             var position = 0;
             buffers.WriteByte(ref position, (byte)OpCodes.LeaveRoom);
-            transport.SendToClient(new ArraySegment<byte>(buffers, 0, position));
+            transport.SendToServer(new ArraySegment<byte>(buffers, 0, position));
             if (isPunch)
             {
                 puncher.StopClient();
@@ -509,14 +509,14 @@ namespace JFramework.Net
 
             buffers.WriteBool(ref position, isPunch);
             buffers.WriteBool(ref position, isPunch && NetworkUtility.GetHostName() != "127.0.0.1");
-            transport.SendToClient(new ArraySegment<byte>(buffers, 0, position));
+            transport.SendToServer(new ArraySegment<byte>(buffers, 0, position));
         }
 
-        public override void SendToServer(int clientId, ArraySegment<byte> segment, int channel = Channel.Reliable)
+        public override void SendToClient(int clientId, ArraySegment<byte> segment, int channel = Channel.Reliable)
         {
             if (isPunch && connections.TryGetSecond(clientId, out int connection))
             {
-                puncher.SendToServer(connection, segment, channel);
+                puncher.SendToClient(connection, segment, channel);
             }
             else
             {
@@ -524,24 +524,24 @@ namespace JFramework.Net
                 buffers.WriteByte(ref position, (byte)OpCodes.UpdateData);
                 buffers.WriteBytes(ref position, segment.Array.Take(segment.Count).ToArray());
                 buffers.WriteInt(ref position, clients.GetSecond(clientId));
-                transport.SendToClient(new ArraySegment<byte>(buffers, 0, position), channel);
+                transport.SendToServer(new ArraySegment<byte>(buffers, 0, position), channel);
             }
         }
 
-        public override void StopServer(int clientId)
+        public override void StopClient(int clientId)
         {
             if (clients.TryGetSecond(clientId, out int ownerId))
             {
                 var position = 0;
                 buffers.WriteByte(ref position, (byte)OpCodes.Disconnect);
                 buffers.WriteInt(ref position, ownerId);
-                transport.SendToClient(new ArraySegment<byte>(buffers, 0, position));
+                transport.SendToServer(new ArraySegment<byte>(buffers, 0, position));
                 return;
             }
 
             if (isPunch && connections.TryGetSecond(clientId, out int connection))
             {
-                puncher.StopServer(connection);
+                puncher.StopClient(connection);
             }
         }
 
@@ -552,7 +552,7 @@ namespace JFramework.Net
                 isServer = false;
                 var position = 0;
                 buffers.WriteByte(ref position, (byte)OpCodes.LeaveRoom);
-                transport.SendToClient(new ArraySegment<byte>(buffers, 0, position));
+                transport.SendToServer(new ArraySegment<byte>(buffers, 0, position));
                 if (isPunch)
                 {
                     puncher.StopServer();
@@ -668,7 +668,7 @@ namespace JFramework.Net
                 buffers.WriteByte(ref position, (byte)OpCodes.JoinRoom);
                 buffers.WriteString(ref position, transport.address);
                 buffers.WriteBool(ref position, false);
-                transport.SendToClient(new ArraySegment<byte>(buffers, 0, position));
+                transport.SendToServer(new ArraySegment<byte>(buffers, 0, position));
                 Debug.Log("从NAT服务器断开，切换至中继服务器。");
             }
 
