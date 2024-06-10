@@ -140,6 +140,12 @@ namespace JFramework.Udp
             }
             catch (SocketException e)
             {
+                if (e.SocketErrorCode == SocketError.ConnectionReset)
+                {
+                    Log.Warn($"服务器重置连接。");
+                    return false;
+                }
+
                 Log.Error($"服务器接收信息失败！\n{e}");
                 return false;
             }
