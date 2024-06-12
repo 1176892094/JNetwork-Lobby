@@ -13,22 +13,24 @@ using Random = UnityEngine.Random;
 namespace JFramework.Net
 {
     [DefaultExecutionOrder(1001)]
-    public partial class NetworkLobbyTransport : Transport, IEntity
+    public partial class LobbyManager : Transport, IEntity
     {
+        public static LobbyManager Instance;
         public Transport transport;
         public Transport puncher;
         public bool isPublic = true;
-        public float sendRate = 3;
+        public string roomName;
+        public string roomData;
         public string serverId;
         public string serverKey = "Secret Key";
-        public string roomName = "Game Room";
-        public string roomData = "Map 1";
-        private StateMode state = StateMode.Disconnect;
+        [Range(1, 10)] public int sendRate = 3;
+
         private int playerId;
         private bool isClient;
         private bool isServer;
         private bool punching;
         private byte[] buffers;
+        private StateMode state = StateMode.Disconnect;
         private UdpClient punchClient;
         private SocketProxy clientProxy;
         private IPEndPoint punchEndPoint;
@@ -44,6 +46,7 @@ namespace JFramework.Net
 
         private void Awake()
         {
+            Instance = this;
             if (transport == puncher)
             {
                 Debug.Log("大厅和内网穿透不能使用同一个传输！");
@@ -396,7 +399,7 @@ namespace JFramework.Net
         }
     }
 
-    public partial class NetworkLobbyTransport
+    public partial class LobbyManager
     {
         public override void StartClient()
         {
@@ -607,7 +610,7 @@ namespace JFramework.Net
         }
     }
 
-    public partial class NetworkLobbyTransport
+    public partial class LobbyManager
     {
         public void NATServerConnect(int clientId)
         {
