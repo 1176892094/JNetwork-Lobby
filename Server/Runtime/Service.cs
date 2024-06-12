@@ -25,7 +25,7 @@ namespace JFramework.Net
             connections.Add(clientId);
             var position = 0;
             var buffer = buffers.Rent(1);
-            buffer.WriteByte(ref position, (byte)OpCodes.Connected);
+            buffer.WriteByte(ref position, (byte)OpCodes.Connect);
             Program.transport.SendToClient(clientId, new ArraySegment<byte>(buffer, 0, position));
             buffers.Return(buffer);
         }
@@ -79,7 +79,7 @@ namespace JFramework.Net
                 var position = segment.Offset;
                 var opcode = (OpCodes)data.ReadByte(ref position);
 
-                if (opcode == OpCodes.Authority)
+                if (opcode == OpCodes.Connected)
                 {
                     if (connections.Contains(clientId))
                     {
@@ -87,7 +87,7 @@ namespace JFramework.Net
                         {
                             position = 0;
                             var buffer = buffers.Rent(1);
-                            buffer.WriteByte(ref position, (byte)OpCodes.Authority);
+                            buffer.WriteByte(ref position, (byte)OpCodes.Connected);
                             Program.transport.SendToClient(clientId, new ArraySegment<byte>(buffer, 0, position));
                             buffers.Return(buffer);
                             connections.Remove(clientId);
@@ -241,8 +241,8 @@ namespace JFramework.Net
     /// </summary>
     public enum OpCodes
     {
-        Connected = 1,
-        Authority = 2,
+        Connect = 1,
+        Connected = 2,
         JoinRoom = 3,
         CreateRoom = 4,
         UpdateRoom = 5,

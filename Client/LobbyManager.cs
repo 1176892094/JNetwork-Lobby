@@ -42,7 +42,6 @@ namespace JFramework.Net
 
         public event Action<List<Room>> OnRoomUpdate;
         public bool isPunch => puncher != null;
-        public bool isActive => state != StateMode.Disconnect;
 
         private void Awake()
         {
@@ -108,7 +107,7 @@ namespace JFramework.Net
 
         public void StartLobby()
         {
-            if (isActive)
+            if (state != StateMode.Disconnect)
             {
                 Debug.LogWarning("大厅服务器已经连接！");
                 return;
@@ -122,7 +121,7 @@ namespace JFramework.Net
 
         public void StopLobby()
         {
-            if (!isActive) return;
+            if (state == StateMode.Disconnect) return;
             Debug.Log("停止大厅服务器。");
             state = StateMode.Disconnect;
             if (isPunch)
@@ -350,7 +349,7 @@ namespace JFramework.Net
 
         private void HeartBeat()
         {
-            if (!isActive) return;
+            if (state == StateMode.Disconnect) return;
             transport.SendToServer(new[] { byte.MaxValue });
             punchClient?.Send(new byte[] { 0 }, 1, serverEndPoint);
             var keys = proxies.Keys.ToList();
@@ -403,7 +402,7 @@ namespace JFramework.Net
     {
         public override void StartClient()
         {
-            if (!isActive)
+            if (state != StateMode.Connected)
             {
                 Debug.Log("没有连接到大厅!");
                 OnClientDisconnect?.Invoke();
@@ -465,7 +464,7 @@ namespace JFramework.Net
 
         public override void StartServer()
         {
-            if (!isActive)
+            if (state != StateMode.Connected)
             {
                 Debug.Log("没有连接到大厅!");
                 return;
