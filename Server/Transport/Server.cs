@@ -142,7 +142,6 @@ namespace JFramework.Udp
             {
                 if (e.SocketErrorCode == SocketError.ConnectionReset)
                 {
-                    Log.Warn($"服务器重置连接。");
                     return false;
                 }
 
