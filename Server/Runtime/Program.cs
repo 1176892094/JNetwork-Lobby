@@ -173,10 +173,10 @@ namespace JFramework.Net
             var endPoint = new IPEndPoint(IPAddress.Any, setting.NATPunchPort);
             while (true)
             {
-                var segment = punchClient.Receive(ref endPoint);
-                var position = 0;
                 try
                 {
+                    var segment = punchClient.Receive(ref endPoint);
+                    var position = 0;
                     if (segment.ReadBool(ref position))
                     {
                         var clientId = segment.ReadString(ref position);
@@ -190,8 +190,13 @@ namespace JFramework.Net
 
                     punchClient.Send(new byte[] { 0 }, 1, endPoint);
                 }
-                catch (Exception e)
+                catch (SocketException e)
                 {
+                    if (e.SocketErrorCode == SocketError.ConnectionReset)
+                    {
+                        continue;
+                    }
+
                     Debug.Log(e.ToString(), ConsoleColor.Red);
                 }
             }
