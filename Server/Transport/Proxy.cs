@@ -225,7 +225,6 @@ namespace JFramework.Udp
             var time = (uint)watch.ElapsedMilliseconds;
             if (time >= receiveTime + timeout)
             {
-                Log.Error($"{GetType()}: 在 {timeout}ms 内没有收到任何消息后的连接超时！");
                 Disconnect();
             }
 
