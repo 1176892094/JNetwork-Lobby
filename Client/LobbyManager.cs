@@ -87,7 +87,7 @@ namespace JFramework.Net
                 state = StateMode.Disconnect;
             }
 
-            void OnClientReceive(ArraySegment<byte> segment, int channel)
+            void OnClientReceive(ArraySegment<byte> segment, byte channel)
             {
                 try
                 {
@@ -143,7 +143,7 @@ namespace JFramework.Net
             transport.StopClient();
         }
 
-        private void OnMessageReceive(ArraySegment<byte> segment, int channel)
+        private void OnMessageReceive(ArraySegment<byte> segment, byte channel)
         {
             var data = segment.Array;
             var position = segment.Offset;
@@ -434,7 +434,7 @@ namespace JFramework.Net
             StartClient();
         }
 
-        public override void SendToServer(ArraySegment<byte> segment, int channel = Channel.Reliable)
+        public override void SendToServer(ArraySegment<byte> segment, byte channel = Channel.Reliable)
         {
             if (punching)
             {
@@ -514,7 +514,7 @@ namespace JFramework.Net
             transport.SendToServer(new ArraySegment<byte>(buffers, 0, position));
         }
 
-        public override void SendToClient(int clientId, ArraySegment<byte> segment, int channel = Channel.Reliable)
+        public override void SendToClient(int clientId, ArraySegment<byte> segment, byte channel = Channel.Reliable)
         {
             if (isPunch && connections.TryGetSecond(clientId, out int connection))
             {
@@ -569,7 +569,7 @@ namespace JFramework.Net
             }
         }
 
-        public override int MessageSize(int channel)
+        public override int MessageSize(byte channel)
         {
             return transport.MessageSize(channel);
         }
@@ -622,7 +622,7 @@ namespace JFramework.Net
             }
         }
 
-        public void NATServerReceive(int clientId, ArraySegment<byte> segment, int channel)
+        public void NATServerReceive(int clientId, ArraySegment<byte> segment, byte channel)
         {
             if (isServer)
             {
@@ -646,7 +646,7 @@ namespace JFramework.Net
             OnClientConnect?.Invoke();
         }
 
-        public void NATClientReceive(ArraySegment<byte> segment, int channel)
+        public void NATClientReceive(ArraySegment<byte> segment, byte channel)
         {
             if (isClient)
             {
