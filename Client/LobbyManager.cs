@@ -375,7 +375,7 @@ namespace JFramework.Net
 
                 var json = "{" + "\"value\":" + request.downloadHandler.text.Decompress() + "}";
                 Debug.Log("房间信息：" + json);
-                OnRoomUpdate?.Invoke(JsonManager.Reader<List<Room>>(json));
+                OnRoomUpdate?.Invoke(JsonManager.Read<List<Room>>(json));
             }
             else
             {
