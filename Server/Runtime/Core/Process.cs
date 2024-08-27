@@ -100,7 +100,7 @@ namespace JFramework.Net
 
                     rooms.Add(id, room);
                     clients.Add(clientId, room);
-                    Debug.Log($"客户端 {clientId} 创建游戏房间。");
+                    Debug.Log($"客户端 {clientId} 创建游戏房间。房间号：{id}");
 
                     using var writer = NetworkWriter.Pop();
                     writer.WriteByte((byte)OpCodes.CreateRoom);
@@ -113,6 +113,7 @@ namespace JFramework.Net
                     var roomId = reader.ReadString();
                     if (rooms.TryGetValue(roomId, out var room) && room.clients.Count + 1 < room.maxCount)
                     {
+                        Debug.Log($"客户端 {clientId} 加入游戏房间。房间号：{roomId}");
                         room.clients.Add(clientId);
                         clients.Add(clientId, room);
                         using var writer = NetworkWriter.Pop();
@@ -218,7 +219,7 @@ namespace JFramework.Net
                 transport.StopClient(clientId);
             }
         }
-        
+
         private enum OpCodes
         {
             Connect = 1,
