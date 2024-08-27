@@ -15,9 +15,9 @@ namespace JFramework.Net
         private Client client;
         private Server server;
 
-        private void Awake()
+        public void Awake()
         {
-            var setting = new Setting(maxUnit, timeout, interval, deadLink, fastResend, sendWindow, receiveWindow);
+            var setting = new Udp.Setting(maxUnit, timeout, interval, deadLink, fastResend, sendWindow, receiveWindow);
             client = new Client(setting, ClientConnect, ClientDisconnect, ClientReceive);
             server = new Server(setting, ServerConnect, ServerDisconnect, ServerReceive);
 
