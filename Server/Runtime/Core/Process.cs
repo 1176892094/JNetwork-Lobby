@@ -7,16 +7,14 @@ namespace JFramework.Net
     public class Process
     {
         public readonly Dictionary<string, Room> rooms = new Dictionary<string, Room>();
-        private readonly Dictionary<int, Room> clients = new Dictionary<int, Room>();
-        private readonly HashSet<int> connections = new HashSet<int>();
-        private readonly string serverKey;
         private readonly Transport transport;
         private readonly Random random = new Random();
+        private readonly HashSet<int> connections = new HashSet<int>();
+        private readonly Dictionary<int, Room> clients = new Dictionary<int, Room>();
 
-        public Process(Transport transport, string serverKey)
+        public Process(Transport transport)
         {
             this.transport = transport;
-            this.serverKey = serverKey;
         }
 
         public void ServerConnected(int clientId)
@@ -27,12 +25,12 @@ namespace JFramework.Net
             transport.SendToClient(clientId, writer);
         }
 
-        public void ServerDisconnected(int clientId, int owner = -1)
+        public void ServerDisconnected(int clientId)
         {
             var copies = rooms.Values.ToList();
             foreach (var room in copies)
             {
-                if (room.ownerId == clientId)
+                if (room.clientId == clientId) // 主机断开
                 {
                     using var writer = NetworkWriter.Pop();
                     writer.WriteByte((byte)OpCodes.LeaveRoom);
@@ -43,23 +41,19 @@ namespace JFramework.Net
                     }
 
                     room.clients.Clear();
-                    rooms.Remove(room.id);
+                    rooms.Remove(room.roomId);
                     clients.Remove(clientId);
                     return;
                 }
 
-                if (owner != -1 && room.ownerId != owner)
-                {
-                    continue;
-                }
-
-                if (room.clients.RemoveAll(client => client == clientId) > 0)
+                if (room.clients.Remove(clientId)) // 客户端断开
                 {
                     using var writer = NetworkWriter.Pop();
-                    writer.WriteByte((byte)OpCodes.Disconnect);
+                    writer.WriteByte((byte)OpCodes.KickRoom);
                     writer.WriteInt(clientId);
-                    transport.SendToClient(room.ownerId, writer);
+                    transport.SendToClient(room.clientId, writer);
                     clients.Remove(clientId);
+                    break;
                 }
             }
         }
@@ -74,8 +68,8 @@ namespace JFramework.Net
                 {
                     if (connections.Contains(clientId))
                     {
-                        var message = reader.ReadString();
-                        if (message == serverKey)
+                        var serverKey = reader.ReadString();
+                        if (serverKey == Program.Setting.ServerKey)
                         {
                             using var writer = NetworkWriter.Pop();
                             writer.WriteByte((byte)OpCodes.Connected);
@@ -95,27 +89,29 @@ namespace JFramework.Net
 
                     var room = new Room
                     {
-                        id = id,
+                        roomId = id,
+                        clientId = clientId,
                         roomName = reader.ReadString(),
                         roomData = reader.ReadString(),
-                        ownerId = clientId,
                         maxCount = reader.ReadInt(),
                         isPublic = reader.ReadBool(),
-                        clients = new List<int>(),
+                        clients = new HashSet<int>(),
                     };
-                    rooms.Add(room.id, room);
+
+                    rooms.Add(id, room);
                     clients.Add(clientId, room);
                     Debug.Log($"客户端 {clientId} 创建游戏房间。");
+
                     using var writer = NetworkWriter.Pop();
                     writer.WriteByte((byte)OpCodes.CreateRoom);
-                    writer.WriteString(room.id);
+                    writer.WriteString(room.roomId);
                     transport.SendToClient(clientId, writer);
                 }
                 else if (opcode == OpCodes.JoinRoom)
                 {
-                    var ownerId = reader.ReadString();
                     ServerDisconnected(clientId);
-                    if (rooms.TryGetValue(ownerId, out var room) && room.clients.Count + 1 < room.maxCount)
+                    var roomId = reader.ReadString();
+                    if (rooms.TryGetValue(roomId, out var room) && room.clients.Count + 1 < room.maxCount)
                     {
                         room.clients.Add(clientId);
                         clients.Add(clientId, room);
@@ -123,7 +119,7 @@ namespace JFramework.Net
                         writer.WriteByte((byte)OpCodes.JoinRoom);
                         writer.WriteInt(clientId);
                         transport.SendToClient(clientId, writer);
-                        transport.SendToClient(room.ownerId, writer);
+                        transport.SendToClient(room.clientId, writer);
                     }
                     else
                     {
@@ -148,17 +144,24 @@ namespace JFramework.Net
                 }
                 else if (opcode == OpCodes.UpdateData)
                 {
-                    var newData = reader.ReadArraySegment();
+                    var message = reader.ReadArraySegment();
                     var targetId = reader.ReadInt();
                     if (clients.TryGetValue(clientId, out var room) && room != null)
                     {
-                        if (room.ownerId == clientId)
+                        if (message.Count > transport.MessageSize(channel))
+                        {
+                            Debug.Log($"接收消息大小过大！消息大小：{message.Count}");
+                            ServerDisconnected(clientId);
+                            return;
+                        }
+
+                        if (room.clientId == clientId)
                         {
                             if (room.clients.Contains(targetId))
                             {
                                 using var writer = NetworkWriter.Pop();
                                 writer.WriteByte((byte)OpCodes.UpdateData);
-                                writer.WriteArraySegment(newData);
+                                writer.WriteArraySegment(message);
                                 transport.SendToClient(targetId, writer, channel);
                             }
                         }
@@ -166,15 +169,47 @@ namespace JFramework.Net
                         {
                             using var writer = NetworkWriter.Pop();
                             writer.WriteByte((byte)OpCodes.UpdateData);
-                            writer.WriteArraySegment(newData);
+                            writer.WriteArraySegment(message);
                             writer.WriteInt(clientId);
-                            transport.SendToClient(room.ownerId, writer, channel);
+                            transport.SendToClient(room.clientId, writer, channel);
                         }
                     }
                 }
-                else if (opcode == OpCodes.Disconnect)
+                else if (opcode == OpCodes.KickRoom)
                 {
-                    ServerDisconnected(reader.ReadInt(), clientId);
+                    var targetId = reader.ReadInt();
+                    var copies = rooms.Values.ToList();
+                    foreach (var room in copies)
+                    {
+                        if (room.clientId == targetId) // 踢掉的是主机
+                        {
+                            using var writer = NetworkWriter.Pop();
+                            writer.WriteByte((byte)OpCodes.LeaveRoom);
+                            foreach (var client in room.clients)
+                            {
+                                transport.SendToClient(client, writer);
+                                clients.Remove(client);
+                            }
+
+                            room.clients.Clear();
+                            rooms.Remove(room.roomId);
+                            clients.Remove(targetId);
+                            return;
+                        }
+
+                        if (room.clientId == clientId) // 踢掉的是客户端
+                        {
+                            if (room.clients.Remove(targetId))
+                            {
+                                using var writer = NetworkWriter.Pop();
+                                writer.WriteByte((byte)OpCodes.KickRoom);
+                                writer.WriteInt(targetId);
+                                transport.SendToClient(room.clientId, writer);
+                                clients.Remove(targetId);
+                                break;
+                            }
+                        }
+                    }
                 }
             }
             catch (Exception e)
@@ -183,20 +218,17 @@ namespace JFramework.Net
                 transport.StopClient(clientId);
             }
         }
-    }
-
-    /// <summary>
-    /// 操作符
-    /// </summary>
-    public enum OpCodes
-    {
-        Connect = 1,
-        Connected = 2,
-        JoinRoom = 3,
-        CreateRoom = 4,
-        UpdateRoom = 5,
-        LeaveRoom = 6,
-        UpdateData = 7,
-        Disconnect = 8,
+        
+        private enum OpCodes
+        {
+            Connect = 1,
+            Connected = 2,
+            JoinRoom = 3,
+            CreateRoom = 4,
+            UpdateRoom = 5,
+            LeaveRoom = 6,
+            UpdateData = 7,
+            KickRoom = 8,
+        }
     }
 }

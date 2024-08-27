@@ -19,17 +19,20 @@ namespace JFramework.Net
     {
         public static Program Instance;
         public static Setting Setting;
-        
+
         private int heartBeat;
         private Process process;
         private Transport transport;
         private MethodInfo awakeMethod;
         private MethodInfo updateMethod;
-        private readonly HashSet<int> clients = new HashSet<int>();
 
         private const string SETTING = "setting.json";
-        public static void Main(string[] args) => new Program().MainAsync().GetAwaiter().GetResult();
         public List<Room> rooms => process.rooms.Values.ToList();
+
+        public static void Main(string[] args)
+        {
+            new Program().MainAsync().GetAwaiter().GetResult();
+        }
 
         public async Task MainAsync()
         {
@@ -44,11 +47,13 @@ namespace JFramework.Net
                 return;
             }
 
-            Setting = JsonConvert.DeserializeObject<Setting>(await File.ReadAllTextAsync(SETTING));
-            Debug.Log("加载程序集...");
             try
             {
+                Setting = JsonConvert.DeserializeObject<Setting>(await File.ReadAllTextAsync(SETTING));
+
+                Debug.Log("加载程序集...");
                 var assembly = Assembly.LoadFile(Path.GetFullPath(Setting.Assembly));
+
                 Debug.Log("加载传输类...");
                 transport = assembly.CreateInstance(Setting.Transport) as Transport;
                 if (transport == null)
@@ -59,29 +64,18 @@ namespace JFramework.Net
                     return;
                 }
 
-                var type = assembly.GetType(Setting.Transport);
                 Debug.Log("加载传输方法...");
-                if (type != null)
-                {
-                    awakeMethod = type.GetMethod("Awake", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                    updateMethod = type.GetMethod("Update", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                }
+                var type = assembly.GetType(Setting.Transport);
+                awakeMethod = type?.GetMethod("Awake", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                updateMethod = type?.GetMethod("Update", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 
-                awakeMethod?.Invoke(transport, null);
                 Debug.Log("开始进行传输...");
-                process = new Process(transport, Setting.ServerKey);
-                transport.OnServerConnect = clientId =>
-                {
-                    clients.Add(clientId);
-                    process.ServerConnected(clientId);
-                };
+                awakeMethod?.Invoke(transport, null);
+                process = new Process(transport);
 
+                transport.OnServerConnect = process.ServerConnected;
+                transport.OnServerDisconnect = process.ServerDisconnected;
                 transport.OnServerReceive = process.ServerReceive;
-                transport.OnServerDisconnect = clientId =>
-                {
-                    clients.Remove(clientId);
-                    process.ServerDisconnected(clientId);
-                };
 
                 transport.port = Setting.EndPointPort;
                 transport.StartServer();
@@ -104,19 +98,14 @@ namespace JFramework.Net
 
             while (true)
             {
-                updateMethod?.Invoke(transport, null);
                 heartBeat++;
                 if (heartBeat >= Setting.HeartBeat)
                 {
                     heartBeat = 0;
-                    foreach (var client in clients)
-                    {
-                        transport.SendToClient(client, new ArraySegment<byte>(new[] { byte.MaxValue }));
-                    }
-
                     GC.Collect();
                 }
 
+                updateMethod?.Invoke(transport, null);
                 await Task.Delay(Setting.UpdateTime);
             }
         }
@@ -152,44 +141,16 @@ namespace JFramework.Net
             }
         }
 
-        public static string Compress(string text)
+        public static string Compress(string message)
         {
-            byte[] buffer = Encoding.UTF8.GetBytes(text);
-            var memoryStream = new MemoryStream();
-            using (var gZipStream = new GZipStream(memoryStream, CompressionMode.Compress, true))
+            var bytes = Encoding.UTF8.GetBytes(message);
+            using var output = new MemoryStream();
+            using (var gzip = new GZipStream(output, CompressionMode.Compress, true))
             {
-                gZipStream.Write(buffer, 0, buffer.Length);
+                gzip.Write(bytes, 0, bytes.Length);
             }
 
-            memoryStream.Position = 0;
-
-            var compressedData = new byte[memoryStream.Length];
-            memoryStream.Read(compressedData, 0, compressedData.Length);
-
-            var gZipBuffer = new byte[compressedData.Length + 4];
-            Buffer.BlockCopy(compressedData, 0, gZipBuffer, 4, compressedData.Length);
-            Buffer.BlockCopy(BitConverter.GetBytes(buffer.Length), 0, gZipBuffer, 0, 4);
-            return Convert.ToBase64String(gZipBuffer);
-        }
-
-        public static string Decompress(string compressedText)
-        {
-            byte[] gZipBuffer = Convert.FromBase64String(compressedText);
-            using (var memoryStream = new MemoryStream())
-            {
-                int dataLength = BitConverter.ToInt32(gZipBuffer, 0);
-                memoryStream.Write(gZipBuffer, 4, gZipBuffer.Length - 4);
-
-                var buffer = new byte[dataLength];
-
-                memoryStream.Position = 0;
-                using (var gZipStream = new GZipStream(memoryStream, CompressionMode.Decompress))
-                {
-                    gZipStream.Read(buffer, 0, buffer.Length);
-                }
-
-                return Encoding.UTF8.GetString(buffer);
-            }
+            return Convert.ToBase64String(output.ToArray());
         }
     }
 

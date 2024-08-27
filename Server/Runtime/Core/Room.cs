@@ -9,7 +9,7 @@ namespace JFramework.Net
         /// <summary>
         /// 房间Id
         /// </summary>
-        public string id;
+        public string roomId;
 
         /// <summary>
         /// 房间名称
@@ -22,14 +22,14 @@ namespace JFramework.Net
         public string roomData;
 
         /// <summary>
-        /// 房间拥有者
-        /// </summary>
-        public int ownerId;
-
-        /// <summary>
         /// 房间最大人数
         /// </summary>
         public int maxCount;
+        
+        /// <summary>
+        /// 房间拥有者
+        /// </summary>
+        public int clientId;
 
         /// <summary>
         /// 是否显示
@@ -39,6 +39,6 @@ namespace JFramework.Net
         /// <summary>
         /// 客户端数量
         /// </summary>
-        public List<int> clients;
+        public HashSet<int> clients;
     }
 }
