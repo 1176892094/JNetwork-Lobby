@@ -71,7 +71,7 @@ namespace JFramework.Net
             }
         }
 
-        public void ServerReceive(int clientId, ArraySegment<byte> segment, int channel)
+        public void ServerReceive(int clientId, ArraySegment<byte> segment, byte channel)
         {
             try
             {

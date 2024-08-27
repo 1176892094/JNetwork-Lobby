@@ -18,13 +18,13 @@ namespace JFramework.Udp
         public bool Congestion;
 
         public Setting(
-            int MaxUnit = Protocol.MTU_DEF,
-            uint Timeout = Protocol.TIME_OUT,
+            int MaxUnit = Kcp.MTU_DEF,
+            uint Timeout = Kcp.TIME_OUT,
             uint Interval = 10,
-            uint DeadLink = Protocol.DEAD_LINK,
+            uint DeadLink = Kcp.DEAD_LINK,
             uint FastResend = 0,
-            uint SendWindow = Protocol.WND_SND,
-            uint ReceiveWindow = Protocol.WND_RCV,
+            uint SendWindow = Kcp.WND_SND,
+            uint ReceiveWindow = Kcp.WND_RCV,
             bool NoDelay = true,
             bool DualMode = true,
             bool Congestion = false)
@@ -51,8 +51,8 @@ namespace JFramework.Udp
 
     internal static class Channel
     {
-        public const int Reliable = 1;
-        public const int Unreliable = 2;
+        public const byte Reliable = 1;
+        public const byte Unreliable = 2;
     }
 
     internal sealed class Pool

@@ -13,7 +13,7 @@ namespace JFramework.Net
         /// <summary>
         /// 使用传输
         /// </summary>
-        public string Transport = "JFramework.Net.NetworkTransport";
+        public string Transport = "JFramework.Net.KcpTransport";
         
         /// <summary>
         /// 服务器密钥
