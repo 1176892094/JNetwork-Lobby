@@ -214,7 +214,7 @@ namespace JFramework.Net
             }
             catch (Exception e)
             {
-                Debug.Log(e.ToString(), ConsoleColor.Red);
+                Debug.LogError(e.ToString());
                 transport.StopClient(clientId);
             }
         }

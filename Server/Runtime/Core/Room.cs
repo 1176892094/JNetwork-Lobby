@@ -1,9 +1,9 @@
-﻿using Newtonsoft.Json;
+﻿using System;
 using System.Collections.Generic;
 
 namespace JFramework.Net
 {
-    [JsonObject(MemberSerialization.OptOut)]
+    [Serializable]
     public class Room
     {
         /// <summary>
