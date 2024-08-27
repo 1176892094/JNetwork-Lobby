@@ -2,24 +2,14 @@
 
 namespace JFramework.Net
 {
+    public static class Channel
+    {
+        public const byte Reliable = 1;
+        public const byte Unreliable = 2;
+    }
+
     public abstract class Transport
     {
-        /// <summary>
-        /// 传输通道
-        /// </summary>
-        protected static class Channel
-        {
-            /// <summary>
-            /// 可靠
-            /// </summary>
-            public const byte Reliable = 1;
-
-            /// <summary>
-            /// 不可靠
-            /// </summary>
-            public const byte UnReliable = 2;
-        }
-
         /// <summary>
         /// 地址
         /// </summary>

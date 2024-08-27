@@ -3,6 +3,7 @@ using JFramework.Udp;
 
 namespace JFramework.Net
 {
+    [Serializable]
     public class KcpTransport : Transport
     {
         public int maxUnit = 1200;
