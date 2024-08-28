@@ -2,19 +2,6 @@
 
 namespace JFramework.Net
 {
-    public static class Channel
-    {
-        public const byte Reliable = 1;
-        public const byte Unreliable = 2;
-    }
-
-    public abstract class Object
-    {
-        public abstract void Awake();
-
-        public abstract void Update();
-    }
-
     public abstract class Transport : Object
     {
         /// <summary>
