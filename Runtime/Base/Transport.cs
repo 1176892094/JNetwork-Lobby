@@ -8,7 +8,14 @@ namespace JFramework.Net
         public const byte Unreliable = 2;
     }
 
-    public abstract class Transport
+    public abstract class Object
+    {
+        public abstract void Awake();
+
+        public abstract void Update();
+    }
+
+    public abstract class Transport : Object
     {
         /// <summary>
         /// 地址

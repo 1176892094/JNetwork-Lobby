@@ -26,23 +26,18 @@ namespace JFramework.Net
         public int UpdateTime = 10;
 
         /// <summary>
-        /// 心跳
-        /// </summary>
-        public int HeartBeat = 100;
-
-        /// <summary>
         /// 是否启用Rest服务
         /// </summary>
         public bool UseEndPoint = true;
+        
+        /// <summary>
+        /// 是否请求服务器列表
+        /// </summary>
+        public bool RequestRoom = true;
 
         /// <summary>
         /// Rest服务器端口
         /// </summary>
-        public ushort EndPointPort = 8080;
-
-        /// <summary>
-        /// 是否请求服务器列表
-        /// </summary>
-        public bool EndPointServerList = true;
+        public ushort RestPort = 8080;
     }
 }

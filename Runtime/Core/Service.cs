@@ -28,9 +28,9 @@ namespace JFramework.Net
         [RestRoute("Get", "/api/compressed/servers")]
         public async Task ServerListCompressed(IHttpContext context)
         {
-            if (Program.Setting.EndPointServerList)
+            if (Program.Setting.RequestRoom)
             {
-                var json = JsonConvert.SerializeObject(Program.Instance.rooms);
+                var json = JsonConvert.SerializeObject(Program.Process.roomInfo);
                 await context.Response.SendResponseAsync(RestUtility.Compress(json));
             }
             else

@@ -1,7 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
@@ -10,16 +8,8 @@ namespace JFramework.Net
 {
     internal class Program
     {
-        public static Program Instance;
         public static Setting Setting;
-
-        private int heartBeat;
-        private Process process;
-        private Transport transport;
-        private MethodInfo awakeMethod;
-        private MethodInfo updateMethod;
-
-        public List<Room> rooms => process.rooms.Values.ToList();
+        public static Process Process;
 
         public static void Main(string[] args)
         {
@@ -28,14 +18,16 @@ namespace JFramework.Net
 
         public async Task MainAsync()
         {
+            Transport transport = null;
             try
             {
-                Instance = this;
-                Debug.Log("启动中继服务器!");
+                Debug.Log("运行服务器...");
                 if (!File.Exists("setting.json"))
                 {
+                    var contents = JsonConvert.SerializeObject(new Setting(), Formatting.Indented);
+                    await File.WriteAllTextAsync("setting.json", contents);
+
                     Debug.LogWarning("请将 setting.json 文件配置正确并重新运行。");
-                    await File.WriteAllTextAsync("setting.json", JsonConvert.SerializeObject(new Setting(), Formatting.Indented));
                     Console.ReadKey();
                     Environment.Exit(0);
                     return;
@@ -56,26 +48,19 @@ namespace JFramework.Net
                     return;
                 }
 
-                Debug.Log("加载传输方法...");
-                var type = assembly.GetType(Setting.Transport);
-                awakeMethod = type?.GetMethod("Awake", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                updateMethod = type?.GetMethod("Update", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-
-                Debug.Log("开始进行传输...");
-                awakeMethod?.Invoke(transport, null);
-                process = new Process(transport);
-
-                transport.OnServerConnect = process.ServerConnected;
-                transport.OnServerDisconnect = process.ServerDisconnected;
-                transport.OnServerReceive = process.ServerReceive;
-
-                transport.port = Setting.EndPointPort;
+                transport.Awake();
+                Process = new Process(transport);
+                transport.OnServerConnect = Process.ServerConnect;
+                transport.OnServerReceive = Process.ServerReceive;
+                transport.OnServerDisconnect = Process.ServerDisconnect;
+                transport.port = Setting.RestPort;
                 transport.StartServer();
 
+                Debug.Log("开始进行传输...");
                 if (Setting.UseEndPoint)
                 {
                     Debug.Log("开启REST服务...");
-                    if (!RestUtility.StartServer(Setting.EndPointPort))
+                    if (!RestUtility.StartServer(Setting.RestPort))
                     {
                         Debug.LogError("请以管理员身份运行或检查端口是否被占用。");
                     }
@@ -90,14 +75,7 @@ namespace JFramework.Net
 
             while (true)
             {
-                heartBeat++;
-                if (heartBeat >= Setting.HeartBeat)
-                {
-                    heartBeat = 0;
-                    GC.Collect();
-                }
-
-                updateMethod?.Invoke(transport, null);
+                transport.Update();
                 await Task.Delay(Setting.UpdateTime);
             }
         }

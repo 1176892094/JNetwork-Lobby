@@ -6,18 +6,19 @@ namespace JFramework.Net
 {
     public class Process
     {
-        public readonly Dictionary<string, Room> rooms = new Dictionary<string, Room>();
         private readonly Transport transport;
         private readonly Random random = new Random();
         private readonly HashSet<int> connections = new HashSet<int>();
         private readonly Dictionary<int, Room> clients = new Dictionary<int, Room>();
+        private readonly Dictionary<string, Room> rooms = new Dictionary<string, Room>();
+        public List<Room> roomInfo => rooms.Values.ToList();
 
         public Process(Transport transport)
         {
             this.transport = transport;
         }
 
-        public void ServerConnected(int clientId)
+        public void ServerConnect(int clientId)
         {
             connections.Add(clientId);
             using var writer = NetworkWriter.Pop();
@@ -25,7 +26,7 @@ namespace JFramework.Net
             transport.SendToClient(clientId, writer);
         }
 
-        public void ServerDisconnected(int clientId)
+        public void ServerDisconnect(int clientId)
         {
             var copies = rooms.Values.ToList();
             foreach (var room in copies)
@@ -80,7 +81,7 @@ namespace JFramework.Net
                 }
                 else if (opcode == OpCodes.CreateRoom)
                 {
-                    ServerDisconnected(clientId);
+                    ServerDisconnect(clientId);
                     string id;
                     do
                     {
@@ -109,7 +110,7 @@ namespace JFramework.Net
                 }
                 else if (opcode == OpCodes.JoinRoom)
                 {
-                    ServerDisconnected(clientId);
+                    ServerDisconnect(clientId);
                     var roomId = reader.ReadString();
                     if (rooms.TryGetValue(roomId, out var room) && room.clients.Count + 1 < room.maxCount)
                     {
@@ -142,7 +143,7 @@ namespace JFramework.Net
                 }
                 else if (opcode == OpCodes.LeaveRoom)
                 {
-                    ServerDisconnected(clientId);
+                    ServerDisconnect(clientId);
                 }
                 else if (opcode == OpCodes.UpdateData)
                 {
@@ -153,7 +154,7 @@ namespace JFramework.Net
                         if (message.Count > transport.MessageSize(channel))
                         {
                             Debug.Log($"接收消息大小过大！消息大小：{message.Count}");
-                            ServerDisconnected(clientId);
+                            ServerDisconnect(clientId);
                             return;
                         }
 

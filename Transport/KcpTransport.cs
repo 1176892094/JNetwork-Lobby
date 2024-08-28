@@ -16,7 +16,7 @@ namespace JFramework.Net
         private Client client;
         private Server server;
 
-        public void Awake()
+        public override void Awake()
         {
             var setting = new Udp.Setting(maxUnit, timeout, interval, deadLink, fastResend, sendWindow, receiveWindow);
             client = new Client(setting, ClientConnect, ClientDisconnect, ClientReceive);
@@ -35,7 +35,7 @@ namespace JFramework.Net
             void ServerDisconnect(int clientId) => OnServerDisconnect.Invoke(clientId);
         }
         
-        public void Update()
+        public override void Update()
         {
             server.EarlyUpdate();
             server.AfterUpdate();
