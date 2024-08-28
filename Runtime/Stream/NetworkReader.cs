@@ -69,7 +69,7 @@ namespace JFramework.Net
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static NetworkReader Pop(ArraySegment<byte> segment)
         {
-            var reader = Pool<NetworkReader>.Pop();
+            var reader = NetworkPool<NetworkReader>.Pop();
             reader.Reset(segment);
             return reader;
         }
@@ -81,7 +81,7 @@ namespace JFramework.Net
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Push(NetworkReader reader)
         {
-            Pool<NetworkReader>.Push(reader);
+            NetworkPool<NetworkReader>.Push(reader);
         }
 
         /// <summary>
@@ -98,7 +98,7 @@ namespace JFramework.Net
         /// </summary>
         void IDisposable.Dispose()
         {
-            Pool<NetworkReader>.Push(this);
+            NetworkPool<NetworkReader>.Push(this);
         }
     }
 

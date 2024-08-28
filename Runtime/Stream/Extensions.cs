@@ -80,7 +80,7 @@ namespace JFramework.Net
                 throw new EndOfStreamException("写入字符串过长!");
             }
 
-            writer.WriteUShort(checked((ushort)(count + 1))); // writer.position + 2
+            writer.WriteUShort(checked((ushort)(count + 1)));
             writer.position += count;
         }
 

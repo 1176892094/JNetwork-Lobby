@@ -8,13 +8,11 @@
 // # Description: This is an automatically generated comment.
 // *********************************************************************************
 
-using System;
 using System.Collections.Generic;
 
 namespace JFramework.Net
 {
-    [Serializable]
-    public static class Pool<T> where T : new()
+    public static class NetworkPool<T> where T : new()
     {
         private static readonly Queue<T> objects = new Queue<T>();
         private static readonly HashSet<T> unique = new HashSet<T>();

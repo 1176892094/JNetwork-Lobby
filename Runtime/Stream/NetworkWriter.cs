@@ -63,7 +63,7 @@ namespace JFramework.Net
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static NetworkWriter Pop()
         {
-            var writer = Pool<NetworkWriter>.Pop();
+            var writer = NetworkPool<NetworkWriter>.Pop();
             writer.Reset();
             return writer;
         }
@@ -75,7 +75,7 @@ namespace JFramework.Net
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Push(NetworkWriter writer)
         {
-            Pool<NetworkWriter>.Push(writer);
+            NetworkPool<NetworkWriter>.Push(writer);
         }
 
         /// <summary>
@@ -92,7 +92,7 @@ namespace JFramework.Net
         /// </summary>
         void IDisposable.Dispose()
         {
-            Pool<NetworkWriter>.Push(this);
+            NetworkPool<NetworkWriter>.Push(this);
         }
     }
 
