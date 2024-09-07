@@ -29,15 +29,12 @@ namespace JFramework.Net
             return new T();
         }
 
-        public static bool Push(T obj)
+        public static void Push(T obj)
         {
             if (unique.Add(obj))
             {
                 objects.Enqueue(obj);
-                return true;
             }
-
-            return false;
         }
     }
 }
