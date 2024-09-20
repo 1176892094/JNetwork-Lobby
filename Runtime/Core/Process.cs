@@ -75,8 +75,9 @@ namespace JFramework.Net
                             using var writer = NetworkWriter.Pop();
                             writer.WriteByte((byte)OpCodes.Connected);
                             transport.SendToClient(clientId, writer);
-                            connections.Remove(clientId);
                         }
+
+                        connections.Remove(clientId);
                     }
                 }
                 else if (opcode == OpCodes.CreateRoom)
@@ -117,7 +118,7 @@ namespace JFramework.Net
                         room.clients.Add(clientId);
                         clients.Add(clientId, room);
                         Debug.Log($"客户端 {clientId} 加入游戏房间。房间名：{room.roomName} 房间数：{rooms.Count} 连接数：{clients.Count}");
-                        
+
                         using var writer = NetworkWriter.Pop();
                         writer.WriteByte((byte)OpCodes.JoinRoom);
                         writer.WriteInt(clientId);
